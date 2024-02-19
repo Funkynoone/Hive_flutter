@@ -1,0 +1,42 @@
+name: hive_flutter
+description: A new Flutter project for Hive restaurant and job seeker application.
+publish_to: 'none' # Remove this line if you wish to publish to pub.dev
+
+version: 1.0.0+1
+
+environment:
+  sdk: '>=2.18.0 <3.0.0' # Updated to a stable version range for Flutter 3
+
+dependencies:
+  flutter:
+    sdk: flutter
+  firebase_core: ^2.25.4
+  firebase_auth: ^4.17.4
+  cloud_firestore: ^4.15.4
+  google_maps_flutter: ^2.5.3
+  flutter_google_places: ^0.3.0
+  google_maps_webservice: ^0.0.19
+  cupertino_icons: ^1.0.6
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^2.0.0
+
+flutter:
+  uses-material-design: true
+
+  # Add any assets your app needs here:
+  #assets:
+  # - images/logo.png
+  # - assets/config.json
+
+  # Uncomment and add any fonts your app needs here:
+  # fonts:
+  #   - family: Open Sans
+  #     fonts:
+  #       - asset: fonts/OpenSans-Regular.ttf
+  #       - asset: fonts/OpenSans-Italic.ttf
+  #         style: italic
+  #       - asset: fonts/OpenSans-Bold.ttf
+  #         weight: 700
