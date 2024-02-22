@@ -1,25 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:hive_flutter/jobs_screen.dart';
+import 'package:hive_flutter/add_job_screen.dart';
 
 // Define your other screens here
 class ExploreScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Center(child: Text('Explore Screen'));
-  }
-}
-
-class JobsScreen extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Center(child: Text('Jobs Screen'));
-  }
-}
-
-class AddPostScreen extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Center(child: Text('Add Post Screen'));
   }
 }
 
@@ -47,7 +35,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   final List<Widget> _screens = [
     ExploreScreen(), // This is your 'Dashboard' or 'Explore' screen
     JobsScreen(),
-    AddPostScreen(),
+    AddJobScreen(),
     SavedScreen(),
     ProfileScreen(),
   ];

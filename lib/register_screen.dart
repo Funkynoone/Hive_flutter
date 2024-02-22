@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:flutter_google_places/flutter_google_places.dart';
 import 'package:google_maps_webservice/places.dart';
+import 'package:fluttertoast/fluttertoast.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 class RegisterScreen extends StatefulWidget {
   @override
@@ -11,6 +12,7 @@ class RegisterScreen extends StatefulWidget {
 }
 
 class _RegisterScreenState extends State<RegisterScreen> {
+  final _formKey = GlobalKey<FormState>();
   final _usernameController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
@@ -19,9 +21,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   bool isBusinessOwner = false;
   LatLng? selectedPlaceLatLng;
-  String? selectedRegion;
-
-  final places = GoogleMapsPlaces(apiKey: "AIzaSyAL3YGfLOU2Ihv0i26NK41MQTFfUJ_l_TY");
+  final places = GoogleMapsPlaces(apiKey: "AIzaSyAL3YGfLOU2Ihv0i26NK41MQTFfUJ_l_TY"); // Ensure you replace YOUR_API_KEY with your actual Google Maps API key
 
   @override
   Widget build(BuildContext context) {
@@ -31,120 +31,131 @@ class _RegisterScreenState extends State<RegisterScreen> {
       ),
       body: SingleChildScrollView(
         padding: EdgeInsets.all(16.0),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: <Widget>[
-            SwitchListTile(
-              title: Text('Register as Business Owner'),
-              value: isBusinessOwner,
-              onChanged: (bool value) {
-                setState(() {
-                  isBusinessOwner = value;
-                });
-                if (!isBusinessOwner) {
-                  _locationController.clear();
-                }
-              },
-            ),
-            Visibility(
-              visible: isBusinessOwner,
-              child: TextFormField(
-                controller: _locationController,
-                decoration: InputDecoration(
-                  labelText: 'Restaurant Location',
-                ),
-                readOnly: true,
-                onTap: () async {
-                  Prediction? p = await PlacesAutocomplete.show(
-                    context: context,
-                    apiKey: "AIzaSyAL3YGfLOU2Ihv0i26NK41MQTFfUJ_l_TY",
-                    mode: Mode.overlay,
-                    types: [],
-                    strictbounds: false,
-                    components: [Component(Component.country, "us")],
-                  );
-
-                  displayPrediction(p);
+        child: Form(
+          key: _formKey,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[
+              SwitchListTile(
+                title: Text(isBusinessOwner ? 'Business Owner' : 'Job Seeker'),
+                value: isBusinessOwner,
+                onChanged: (bool value) {
+                  setState(() {
+                    isBusinessOwner = value;
+                    _locationController.clear();
+                    selectedPlaceLatLng = null;
+                  });
                 },
               ),
-            ),
-            TextFormField(
-              controller: _usernameController,
-              decoration: InputDecoration(labelText: 'Username'),
-            ),
-            TextFormField(
-              controller: _emailController,
-              decoration: InputDecoration(labelText: 'Email'),
-              keyboardType: TextInputType.emailAddress,
-            ),
-            TextFormField(
-              controller: _passwordController,
-              decoration: InputDecoration(labelText: 'Password'),
-              obscureText: true,
-            ),
-            TextFormField(
-              controller: _confirmPasswordController,
-              decoration: InputDecoration(labelText: 'Confirm Password'),
-              obscureText: true,
-            ),
-            ElevatedButton(
-              child: Text('Register'),
-              onPressed: () async {
-                if (_passwordController.text == _confirmPasswordController.text) {
-                  try {
-                    UserCredential userCredential = await FirebaseAuth.instance.createUserWithEmailAndPassword(
-                      email: _emailController.text,
-                      password: _passwordController.text,
+              if (isBusinessOwner)
+                TextFormField(
+                  controller: _locationController,
+                  decoration: InputDecoration(
+                    labelText: 'Restaurant Location',
+                    suffixIcon: Icon(Icons.search),
+                  ),
+                  readOnly: true,
+                  onTap: () async {
+                    Prediction? p = await PlacesAutocomplete.show(
+                      context: context,
+                      apiKey: "YOUR_API_KEY",
+                      mode: Mode.overlay,
+                      types: [],
+                      strictbounds: false,
+                      components: [Component(Component.country, "us")],
                     );
 
-                    if (userCredential.user != null) {
-                      saveUserData(
-                        userCredential.user!.uid,
-                        _emailController.text,
-                        _usernameController.text,
-                        isBusinessOwner,
-                        selectedPlaceLatLng?.latitude,
-                        selectedPlaceLatLng?.longitude,
-                        selectedRegion,
-                      );
+                    if (p != null) {
+                      displayPrediction(p);
                     }
-                  } on FirebaseAuthException catch (e) {
-                    // Handle errors
+                  },
+                ),
+              TextFormField(
+                controller: _usernameController,
+                decoration: InputDecoration(labelText: 'Username'),
+              ),
+              TextFormField(
+                controller: _emailController,
+                decoration: InputDecoration(labelText: 'Email'),
+                keyboardType: TextInputType.emailAddress,
+              ),
+              TextFormField(
+                controller: _passwordController,
+                decoration: InputDecoration(labelText: 'Password'),
+                obscureText: true,
+              ),
+              TextFormField(
+                controller: _confirmPasswordController,
+                decoration: InputDecoration(labelText: 'Confirm Password'),
+                obscureText: true,
+              ),
+              ElevatedButton(
+                child: Text('Register'),
+                onPressed: () async {
+                  if (_formKey.currentState!.validate()) {
+                    // Registration logic
+                    try {
+                      UserCredential userCredential = await FirebaseAuth.instance.createUserWithEmailAndPassword(
+                        email: _emailController.text.trim(),
+                        password: _passwordController.text.trim(),
+                      );
+                      // On successful registration, save user data
+                      if (userCredential.user != null) {
+                        saveUserData(
+                          userCredential.user!.uid,
+                          _emailController.text.trim(),
+                          _usernameController.text.trim(),
+                          isBusinessOwner,
+                          selectedPlaceLatLng?.latitude,
+                          selectedPlaceLatLng?.longitude,
+                        );
+                      }
+                    } on FirebaseAuthException catch (e) {
+                      Fluttertoast.showToast(msg: "Failed to register: ${e.message}");
+                    }
                   }
-                } else {
-                  // Handle password mismatch
-                }
-              },
-            ),
-          ],
+                },
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  Future<void> displayPrediction(Prediction? p) async {
-    if (p != null) {
-      PlacesDetailsResponse detail = await places.getDetailsByPlaceId(p.placeId!);
+  Future<void> displayPrediction(Prediction p) async {
+    if (p.placeId == null) {
+      Fluttertoast.showToast(msg: "No place selected");
+      return;
+    }
+
+    GoogleMapsPlaces _places = GoogleMapsPlaces(apiKey: "AIzaSyAL3YGfLOU2Ihv0i26NK41MQTFfUJ_l_TY"); // Use your actual API key
+    PlacesDetailsResponse detail = await _places.getDetailsByPlaceId(p.placeId!);
+
+    if (detail.status == "OK") {
       final lat = detail.result.geometry!.location.lat;
       final lng = detail.result.geometry!.location.lng;
 
       setState(() {
         _locationController.text = detail.result.name;
         selectedPlaceLatLng = LatLng(lat, lng);
-        selectedRegion = detail.result.formattedAddress;
       });
+    } else {
+      Fluttertoast.showToast(msg: "Failed to fetch location details");
     }
   }
 
-  void saveUserData(String userId, String email, String username, bool isBusinessOwner, double? latitude, double? longitude, String? region) {
-    final userData = {
+
+  void saveUserData(String userId, String email, String username, bool isBusinessOwner, double? latitude, double? longitude) {
+    FirebaseFirestore.instance.collection('users').doc(userId).set({
       'username': username,
       'email': email,
-      'role': isBusinessOwner ? 'Business Owner' : 'Job Seeker',
-      'latitude': latitude,
-      'longitude': longitude,
-      'region': region,
-    };
-    FirebaseFirestore.instance.collection('users').doc(userId).set(userData);
+      'isBusinessOwner': isBusinessOwner,
+      'location': GeoPoint(latitude ?? 0, longitude ?? 0),
+    }).then((_) {
+      Fluttertoast.showToast(msg: "Registration successful");
+    }).catchError((error) {
+      Fluttertoast.showToast(msg: "Failed to save user data: $error");
+    });
   }
 }

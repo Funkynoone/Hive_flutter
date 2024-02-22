@@ -17,6 +17,8 @@ dependencies:
   flutter_google_places: ^0.3.0
   google_maps_webservice: ^0.0.19
   cupertino_icons: ^1.0.6
+  url_launcher: ^6.2.4
+  fluttertoast: ^8.0.8
 
 dev_dependencies:
   flutter_test:
