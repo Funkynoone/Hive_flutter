@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:hive_flutter/models/job.dart'; // Adjust the path as needed
+import 'package:hive_flutter/models/job.dart'; // Ensure this path matches your project structure
 
 class JobsScreen extends StatefulWidget {
   @override
@@ -9,7 +9,6 @@ class JobsScreen extends StatefulWidget {
 }
 
 class _JobsScreenState extends State<JobsScreen> {
-  // Define filter states
   bool showFullTime = false;
   bool showPartTime = false;
   bool showSeason = false;
@@ -20,10 +19,8 @@ class _JobsScreenState extends State<JobsScreen> {
   bool showSommelier = false;
   bool showCleaning = false;
   bool showCook = false;
-  // ... add more for each job specification and contract time
-
   String? selectedRegion;
-  final List<String> regions = ['Attica', 'Sterea Ellada', 'Peloponnisus','Epirus','Thessalia','Thraki','Ionian islands','Aegean islands','Creta']; // Example regions list
+  final List<String> regions = ['Attica', 'Sterea Ellada', 'Peloponnisus','Epirus','Thessalia','Thraki','Ionian islands','Aegean islands','Creta'];
 
   @override
   Widget build(BuildContext context) {
@@ -53,7 +50,6 @@ class _JobsScreenState extends State<JobsScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Job Specifications Section
             Text('Job Specifications', style: TextStyle(fontSize: 18.0, fontWeight: FontWeight.bold)),
             Wrap(
               spacing: 8.0,
@@ -64,12 +60,10 @@ class _JobsScreenState extends State<JobsScreen> {
                 filterChip('Cleaning', showCleaning),
                 filterChip('Delivery', showDelivery),
                 filterChip('Bar', showBar),
-                filterChip('Sommelier', showSommelier)
-                // ... more job specification chips
+                filterChip('Sommelier', showSommelier),
               ],
             ),
             SizedBox(height: 20),
-            // Contract Time Section
             Text('Contract Time', style: TextStyle(fontSize: 18.0, fontWeight: FontWeight.bold)),
             Wrap(
               spacing: 8.0,
@@ -77,16 +71,14 @@ class _JobsScreenState extends State<JobsScreen> {
                 filterChip('Full Time', showFullTime),
                 filterChip('Part Time', showPartTime),
                 filterChip('Season', showSeason),
-                // ... more contract time chips
               ],
             ),
             SizedBox(height: 20),
-            // Region Filter Dropdown
             Text('Region Filter', style: TextStyle(fontSize: 18.0, fontWeight: FontWeight.bold)),
             DropdownButton<String>(
               isExpanded: true,
               value: selectedRegion,
-              hint: Text('All Regions'),
+              hint: Text('Select Region'),
               onChanged: (String? newValue) {
                 setState(() {
                   selectedRegion = newValue;
@@ -102,7 +94,7 @@ class _JobsScreenState extends State<JobsScreen> {
             SizedBox(height: 20),
             ElevatedButton(
               onPressed: () {
-                // TODO: Implement search functionality
+                // Implement search functionality based on selected filters
               },
               child: Text('SEARCH'),
               style: ElevatedButton.styleFrom(
@@ -118,7 +110,7 @@ class _JobsScreenState extends State<JobsScreen> {
                 minimumSize: Size(double.infinity, 36),
               ),
             ),
-            // ... your job listing ListView.builder here ...
+            // Implement your job listing ListView.builder here
           ],
         ),
       ),
@@ -143,7 +135,11 @@ class _JobsScreenState extends State<JobsScreen> {
       showSeason = false;
       showService = false;
       showManager = false;
-      // ... set all other job specification and contract time booleans to false
+      showBar = false;
+      showDelivery = false;
+      showSommelier = false;
+      showCleaning = false;
+      showCook = false;
       selectedRegion = null;
     });
   }
@@ -154,23 +150,24 @@ class _JobsScreenState extends State<JobsScreen> {
       selected: isSelected,
       onSelected: (bool value) {
         setState(() {
-          switch (label) {
-            case 'Service':
-              showService = value;
-              break;
-            case 'Manager':
-              showManager = value;
-              break;
-          // ... handle other cases for each job specification and contract time
-          }
+          // Update the state for each filter chip based on the label
+          if (label == 'Service') showService = value;
+          else if (label == 'Manager') showManager = value;
+          else if (label == 'Cook') showCook = value;
+          else if (label == 'Cleaning') showCleaning = value;
+          else if (label == 'Delivery') showDelivery = value;
+          else if (label == 'Bar') showBar = value;
+          else if (label == 'Sommelier') showSommelier = value;
+          else if (label == 'Full Time') showFullTime = value;
+          else if (label == 'Part Time') showPartTime = value;
+          else if (label == 'Season') showSeason = value;
+          // Add more conditions as needed
         });
       },
       backgroundColor: Colors.blue.shade100,
       selectedColor: Colors.blue.shade400,
       labelStyle: TextStyle(color: isSelected ? Colors.white : Colors.black),
-      shape: StadiumBorder(),
+      shape: StadiumBorder(side: BorderSide(color: Colors.blue)),
     );
   }
-
-// ... add your filterJobs method and other methods as needed ...
 }
