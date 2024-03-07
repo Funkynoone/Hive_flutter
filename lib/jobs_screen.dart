@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:hive_flutter/models/job.dart'; // Ensure this path matches your project structure
+import 'package:hive_flutter/models/job.dart';
 
 class JobsScreen extends StatefulWidget {
   @override

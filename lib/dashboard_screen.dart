@@ -1,29 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:hive_flutter/profile_screen.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:hive_flutter/jobs_screen.dart';
 import 'package:hive_flutter/add_job_screen.dart';
-
-// Define your other screens here
-class ExploreScreen extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Center(child: Text('Explore Screen'));
-  }
-}
-
-class SavedScreen extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Center(child: Text('Saved Screen'));
-  }
-}
-
-class ProfileScreen extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Center(child: Text('Profile Screen'));
-  }
-}
 
 class DashboardScreen extends StatefulWidget {
   @override
@@ -31,14 +11,26 @@ class DashboardScreen extends StatefulWidget {
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
-  int _selectedIndex = 0; // Starts with ExploreScreen as the initial screen
-  final List<Widget> _screens = [
-    ExploreScreen(), // This is your 'Dashboard' or 'Explore' screen
-    JobsScreen(),
-    AddJobScreen(),
-    SavedScreen(),
-    ProfileScreen(),
-  ];
+  int _selectedIndex = 0; // Adjust if needed based on your actual screens
+
+  late final List<Widget> _screens;
+
+  _DashboardScreenState() {
+    _screens = [
+      // Assuming you replace these with actual screens you have
+      Center(child: Text('Explore Screen')), // Placeholder for ExploreScreen
+      JobsScreen(),
+      AddJobScreen(),
+      Center(child: Text('Saved Screen')), // Placeholder for SavedScreen
+      ProfileScreen(onLogout: () async {
+        // Sign out from Firebase Auth
+        await FirebaseAuth.instance.signOut();
+
+        // Navigate to the login page
+        Navigator.pushReplacementNamed(context, '/login');
+      }),
+    ];
+  }
 
   void _onItemTapped(int index) {
     setState(() {
@@ -50,13 +42,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Explore'), // Adjust based on the selected screen if needed
+        title: Text('App'), // Adjust based on the selected screen if needed
       ),
-      body: Center(
-        child: _screens.elementAt(_selectedIndex),
+      body: IndexedStack(
+        index: _selectedIndex,
+        children: _screens,
       ),
       bottomNavigationBar: BottomNavigationBar(
-        type: BottomNavigationBarType.fixed, // This ensures all items are fixed to the bottom
+        type: BottomNavigationBarType.fixed,
         items: const <BottomNavigationBarItem>[
           BottomNavigationBarItem(icon: Icon(Icons.explore), label: 'Explore'),
           BottomNavigationBarItem(icon: Icon(Icons.work), label: 'Jobs'),
