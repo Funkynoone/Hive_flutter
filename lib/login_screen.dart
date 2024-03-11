@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'dashboard_screen.dart'; // Assuming you have a DashboardScreen
-import 'register_screen.dart'; // Assuming you have a RegisterScreen
+import 'dashboard_screen.dart';
+import 'register_screen.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
 
 class LoginScreen extends StatefulWidget {
   @override
@@ -58,6 +61,14 @@ class _LoginScreenState extends State<LoginScreen> {
         password: _passwordController.text.trim(),
       );
       if (userCredential.user != null) {
+        // Fetch the user's role from Firestore
+        final docSnapshot = await FirebaseFirestore.instance.collection('users').doc(userCredential.user!.uid).get();
+        final isBusinessOwner = docSnapshot.data()?['isBusinessOwner'] ?? false;
+
+        // Store the role in SharedPreferences
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setBool('isBusinessOwner', isBusinessOwner);
+
         Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => DashboardScreen())); // Navigate to Dashboard
       }
     } catch (e) {

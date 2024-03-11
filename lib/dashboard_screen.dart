@@ -11,35 +11,54 @@ class DashboardScreen extends StatefulWidget {
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
-  int _selectedIndex = 0; // Adjust if needed based on your actual screens
+  int _selectedIndex = 0;
+  bool isBusinessOwner = false; // This will be set based on the logged-in user's role
 
   late final List<Widget> _screens;
 
-  _DashboardScreenState() {
+  @override
+  void initState() {
+    super.initState();
+    fetchUserRole(); // Function to determine if the user is a business owner
+  }
+
+  void fetchUserRole() async {
+    // Assuming you're storing the user's role in Firestore
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      final docSnapshot = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+      setState(() {
+        isBusinessOwner = docSnapshot['isBusinessOwner'] ?? false;
+        // Initialize _screens here after fetching user role
+        _initializeScreens();
+      });
+    }
+  }
+
+  void _initializeScreens() {
     _screens = [
-      // Assuming you replace these with actual screens you have
       Center(child: Text('Explore Screen')), // Placeholder for ExploreScreen
       JobsScreen(),
-      AddJobScreen(),
+      if (isBusinessOwner) AddJobScreen(),
       Center(child: Text('Saved Screen')), // Placeholder for SavedScreen
       ProfileScreen(onLogout: () async {
-        // Sign out from Firebase Auth
         await FirebaseAuth.instance.signOut();
-
-        // Navigate to the login page
         Navigator.pushReplacementNamed(context, '/login');
       }),
     ];
   }
 
-  void _onItemTapped(int index) {
-    setState(() {
-      _selectedIndex = index;
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
+    // Define BottomNavigationBarItems based on the user's role
+    List<BottomNavigationBarItem> navBarItems = [
+      BottomNavigationBarItem(icon: Icon(Icons.explore), label: 'Explore'),
+      BottomNavigationBarItem(icon: Icon(Icons.work), label: 'Jobs'),
+      if (isBusinessOwner) BottomNavigationBarItem(icon: Icon(Icons.add_circle_outline), label: 'Add Post'),
+      BottomNavigationBarItem(icon: Icon(Icons.save_alt), label: 'Saved'),
+      BottomNavigationBarItem(icon: Icon(Icons.account_circle), label: 'Profile'),
+    ];
+
     return Scaffold(
       appBar: AppBar(
         title: Text('App'), // Adjust based on the selected screen if needed
@@ -50,17 +69,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
       ),
       bottomNavigationBar: BottomNavigationBar(
         type: BottomNavigationBarType.fixed,
-        items: const <BottomNavigationBarItem>[
-          BottomNavigationBarItem(icon: Icon(Icons.explore), label: 'Explore'),
-          BottomNavigationBarItem(icon: Icon(Icons.work), label: 'Jobs'),
-          BottomNavigationBarItem(icon: Icon(Icons.add_circle_outline), label: 'Add Post'),
-          BottomNavigationBarItem(icon: Icon(Icons.save_alt), label: 'Saved'),
-          BottomNavigationBarItem(icon: Icon(Icons.account_circle), label: 'Profile'),
-        ],
+        items: navBarItems,
         currentIndex: _selectedIndex,
         selectedItemColor: Colors.amber[800],
         onTap: _onItemTapped,
       ),
     );
+  }
+
+  void _onItemTapped(int index) {
+    setState(() {
+      _selectedIndex = index;
+    });
   }
 }
