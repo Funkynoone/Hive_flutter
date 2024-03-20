@@ -5,7 +5,7 @@ class Job {
   final String description;
   final double latitude;
   final double longitude;
-  final String category; // Add this line
+  final List<String> category; // Changed to a list
 
   Job({
     required this.title,
@@ -14,10 +14,9 @@ class Job {
     required this.description,
     required this.latitude,
     required this.longitude,
-    required this.category, // Add this line
+    required this.category, // Changed to a list
   });
 
-  // Update your method for creating a Job object from Firestore data to include the 'category'
   factory Job.fromFirestore(Map<String, dynamic> firestore) {
     return Job(
       title: firestore['title'] ?? '',
@@ -26,7 +25,7 @@ class Job {
       description: firestore['description'] ?? '',
       latitude: firestore['latitude'] ?? 0.0,
       longitude: firestore['longitude'] ?? 0.0,
-      category: firestore['category'] ?? '', // Add this line
+      category: List<String>.from(firestore['category'] ?? []), // Adjusted for a list
     );
   }
 }

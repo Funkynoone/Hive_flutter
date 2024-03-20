@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:hive_flutter/models/job.dart';
+import 'package:hive_flutter/models/job.dart'; // Adjust the path as needed
 
 class JobsScreen extends StatefulWidget {
   @override
@@ -20,7 +20,8 @@ class _JobsScreenState extends State<JobsScreen> {
   bool showCleaning = false;
   bool showCook = false;
   String? selectedRegion;
-  final List<String> regions = ['Attica', 'Sterea Ellada', 'Peloponnisus','Epirus','Thessalia','Thraki','Ionian islands','Aegean islands','Creta'];
+  final List<String> regions = ['Attica', 'Sterea Ellada', 'Peloponnisus', 'Epirus', 'Thessalia', 'Thraki', 'Ionian islands', 'Aegean islands', 'Creta'];
+  List<Job> _jobs = [];
 
   @override
   Widget build(BuildContext context) {
@@ -93,9 +94,7 @@ class _JobsScreenState extends State<JobsScreen> {
             ),
             SizedBox(height: 20),
             ElevatedButton(
-              onPressed: () {
-                // Implement search functionality based on selected filters
-              },
+              onPressed: _searchJobs,
               child: Text('SEARCH'),
               style: ElevatedButton.styleFrom(
                 primary: Colors.purple,
@@ -110,7 +109,21 @@ class _JobsScreenState extends State<JobsScreen> {
                 minimumSize: Size(double.infinity, 36),
               ),
             ),
-            // Implement your job listing ListView.builder here
+            _jobs.isNotEmpty
+                ? ListView.builder(
+              shrinkWrap: true,
+              physics: NeverScrollableScrollPhysics(),
+              itemCount: _jobs.length,
+              itemBuilder: (context, index) {
+                final job = _jobs[index];
+                return ListTile(
+                  title: Text(job.title),
+                  subtitle: Text('${job.restaurant} - ${job.type} - ${job.category}'),
+                  onTap: () {/* Navigate to job detail */},
+                );
+              },
+            )
+                : Center(child: Text("No jobs found")),
           ],
         ),
       ),
@@ -122,9 +135,7 @@ class _JobsScreenState extends State<JobsScreen> {
     if (await canLaunch(googleMapsUrl)) {
       await launch(googleMapsUrl);
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not open Google Maps.')),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not open Google Maps.')));
     }
   }
 
@@ -143,6 +154,40 @@ class _JobsScreenState extends State<JobsScreen> {
       selectedRegion = null;
     });
   }
+  void _searchJobs() async {
+    Query query = FirebaseFirestore.instance.collection('JobListings');
+
+    List<String> activeFilters = [];
+
+    if (showService) activeFilters.add('Service');
+    if (showManager) activeFilters.add('Manager');
+    if (showCook) activeFilters.add('Cook');
+    if (showCleaning) activeFilters.add('Cleaning');
+    if (showDelivery) activeFilters.add('Delivery');
+    if (showBar) activeFilters.add('Bar');
+    if (showSommelier) activeFilters.add('Sommelier');
+    if (showFullTime) activeFilters.add('FullTime');
+    if (showPartTime) activeFilters.add('PartTime');
+    if (showSeason) activeFilters.add('Season');
+
+    // Filter by region if selected
+    if (selectedRegion != null) query = query.where('region', isEqualTo: selectedRegion);
+    print("Active filters: $activeFilters");
+    print("Querying with region: $selectedRegion");
+
+    // Apply job title filters if any are active
+    if (activeFilters.isNotEmpty) {
+      query = query.where('category', arrayContainsAny: activeFilters);
+    }
+
+    final QuerySnapshot querySnapshot = await query.get();
+    final List<QueryDocumentSnapshot> documents = querySnapshot.docs;
+
+    setState(() {
+      _jobs = documents.map((doc) => Job.fromFirestore(doc.data() as Map<String, dynamic>)).toList();
+    });
+  }
+
 
   Widget filterChip(String label, bool isSelected) {
     return FilterChip(
@@ -150,7 +195,6 @@ class _JobsScreenState extends State<JobsScreen> {
       selected: isSelected,
       onSelected: (bool value) {
         setState(() {
-          // Update the state for each filter chip based on the label
           if (label == 'Service') showService = value;
           else if (label == 'Manager') showManager = value;
           else if (label == 'Cook') showCook = value;
@@ -161,7 +205,7 @@ class _JobsScreenState extends State<JobsScreen> {
           else if (label == 'Full Time') showFullTime = value;
           else if (label == 'Part Time') showPartTime = value;
           else if (label == 'Season') showSeason = value;
-          // Add more conditions as needed
+          // Add more conditions for other filters if needed
         });
       },
       backgroundColor: Colors.blue.shade100,

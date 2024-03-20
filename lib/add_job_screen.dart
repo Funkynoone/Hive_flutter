@@ -15,9 +15,27 @@ class _AddJobScreenState extends State<AddJobScreen> {
   String? _selectedJobTitle;
   String? _selectedJobType;
   String? _selectedRegion;
-  final List<String> jobTitles = ['Service', 'Bar', 'Cook', 'Cleaning', 'Manager', 'Delivery', 'Sommelier'];
+  final List<String> jobTitles = [
+    'Service',
+    'Bar',
+    'Cook',
+    'Cleaning',
+    'Manager',
+    'Delivery',
+    'Sommelier'
+  ];
   final List<String> jobTypes = ['Full-time', 'Part-time', 'Season'];
-  final List<String> regions = ['Attica', 'Sterea Ellada', 'Peloponnisus', 'Epirus', 'Thessalia', 'Thraki', 'Ionian islands', 'Aegean islands', 'Creta'];
+  final List<String> regions = [
+    'Attica',
+    'Sterea Ellada',
+    'Peloponnisus',
+    'Epirus',
+    'Thessalia',
+    'Thraki',
+    'Ionian islands',
+    'Aegean islands',
+    'Creta'
+  ];
 
   @override
   void dispose() {
@@ -42,7 +60,8 @@ class _AddJobScreenState extends State<AddJobScreen> {
             children: <Widget>[
               DropdownButtonFormField<String>(
                 value: _selectedJobTitle,
-                decoration: InputDecoration(labelText: 'Job Title', border: OutlineInputBorder()),
+                decoration: InputDecoration(
+                    labelText: 'Job Title', border: OutlineInputBorder()),
                 onChanged: (value) {
                   setState(() {
                     _selectedJobTitle = value;
@@ -57,7 +76,8 @@ class _AddJobScreenState extends State<AddJobScreen> {
               ),
               DropdownButtonFormField<String>(
                 value: _selectedJobType,
-                decoration: InputDecoration(labelText: 'Job Type', border: OutlineInputBorder()),
+                decoration: InputDecoration(
+                    labelText: 'Job Type', border: OutlineInputBorder()),
                 onChanged: (value) {
                   setState(() {
                     _selectedJobType = value;
@@ -90,15 +110,21 @@ class _AddJobScreenState extends State<AddJobScreen> {
               ),
               TextFormField(
                 controller: _jobDescriptionController,
-                decoration: InputDecoration(labelText: 'Job Description', border: OutlineInputBorder()),
+                decoration: InputDecoration(
+                    labelText: 'Job Description', border: OutlineInputBorder()),
                 maxLines: 6,
-                validator: (value) => value!.isEmpty ? 'Please enter a job description' : null,
+                validator: (value) =>
+                value!.isEmpty
+                    ? 'Please enter a job description'
+                    : null,
               ),
               SizedBox(height: 20),
               ElevatedButton(
                 onPressed: _addJobOffer,
                 child: Text('Add Job Offer'),
-                style: ElevatedButton.styleFrom(primary: Theme.of(context).primaryColor),
+                style: ElevatedButton.styleFrom(primary: Theme
+                    .of(context)
+                    .primaryColor),
               ),
             ],
           ),
@@ -109,16 +135,31 @@ class _AddJobScreenState extends State<AddJobScreen> {
 
   void _addJobOffer() {
     if (_formKey.currentState!.validate()) {
+      // Determine the category based on the job title
+      List<String> category = [];
+      // Add the job title to the category list if not null
+      if (_selectedJobTitle != null) {
+        category.add(_selectedJobTitle!);
+      }
+
+      // Add the job type to the category list if not null
+      if (_selectedJobType != null) {
+        category.add(_selectedJobType!);
+      }
+
       FirebaseFirestore.instance.collection('JobListings').add({
         'title': _selectedJobTitle,
         'type': _selectedJobType,
         'region': _selectedRegion,
         'description': _jobDescriptionController.text,
+        // Save the determined category along with other job details
+        'category': category,
       }).then((result) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Job offer added successfully')));
-        // Optionally, clear the form here
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Job offer added successfully')));
       }).catchError((error) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to add job offer: $error')));
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Failed to add job offer: $error')));
       });
     }
   }
