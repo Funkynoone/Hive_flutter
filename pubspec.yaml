@@ -20,6 +20,7 @@ dependencies:
   url_launcher: ^6.2.4
   fluttertoast: ^8.0.8
   shared_preferences: ^2.2.2
+  image_picker: ^1.0.7
 
 dev_dependencies:
   flutter_test:
@@ -28,6 +29,8 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/profileimage.png
 
   # Add any assets your app needs here:
   #assets:

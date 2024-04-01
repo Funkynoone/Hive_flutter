@@ -36,17 +36,28 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   void _initializeScreens() {
-    _screens = [
+    // Assume isBusinessOwner is already defined based on user role
+    List<Widget> screens = [
       Center(child: Text('Explore Screen')), // Placeholder for ExploreScreen
       JobsScreen(),
-      if (isBusinessOwner) AddJobScreen(),
       Center(child: Text('Saved Screen')), // Placeholder for SavedScreen
       ProfileScreen(onLogout: () async {
         await FirebaseAuth.instance.signOut();
+        // Navigate to your login screen
         Navigator.pushReplacementNamed(context, '/login');
       }),
     ];
+
+    // Conditionally add the AddJobScreen
+    if (isBusinessOwner) {
+      screens.insert(2, AddJobScreen()); // Insert at desired position
+    }
+
+    setState(() {
+      _screens = screens;
+    });
   }
+
 
   @override
   Widget build(BuildContext context) {

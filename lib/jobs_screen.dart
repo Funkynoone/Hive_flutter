@@ -157,34 +157,54 @@ class _JobsScreenState extends State<JobsScreen> {
   void _searchJobs() async {
     Query query = FirebaseFirestore.instance.collection('JobListings');
 
-    List<String> activeFilters = [];
+    List<String> titleFilters = [];
+    List<String> typeFilters = [];
 
-    if (showService) activeFilters.add('Service');
-    if (showManager) activeFilters.add('Manager');
-    if (showCook) activeFilters.add('Cook');
-    if (showCleaning) activeFilters.add('Cleaning');
-    if (showDelivery) activeFilters.add('Delivery');
-    if (showBar) activeFilters.add('Bar');
-    if (showSommelier) activeFilters.add('Sommelier');
-    if (showFullTime) activeFilters.add('FullTime');
-    if (showPartTime) activeFilters.add('PartTime');
-    if (showSeason) activeFilters.add('Season');
+    // Job titles
+    if (showService) titleFilters.add('Service');
+    if (showManager) titleFilters.add('Manager');
+    if (showBar) titleFilters.add('Bar');
+    if (showDelivery) titleFilters.add('Delivery');
+    if (showSommelier) titleFilters.add('Sommelier');
+    if (showCleaning) titleFilters.add('Cleaning');
+    if (showCook) titleFilters.add('Cook');
 
-    // Filter by region if selected
-    if (selectedRegion != null) query = query.where('region', isEqualTo: selectedRegion);
-    print("Active filters: $activeFilters");
-    print("Querying with region: $selectedRegion");
+    // Job types
+    if (showFullTime) typeFilters.add('Full Time');
+    if (showPartTime) typeFilters.add('Part Time');
+    if (showSeason) typeFilters.add('Season');
 
-    // Apply job title filters if any are active
-    if (activeFilters.isNotEmpty) {
-      query = query.where('category', arrayContainsAny: activeFilters);
+    // Check if no filters are applied
+    bool noFiltersApplied = titleFilters.isEmpty && typeFilters.isEmpty && selectedRegion == null;
+    print("No Filters Applied: $noFiltersApplied");
+
+    List<Job> jobs = [];
+
+    if (noFiltersApplied) {
+      // Fetch all documents when no filters are applied
+      final QuerySnapshot querySnapshot = await query.get();
+      jobs = querySnapshot.docs.map((doc) => Job.fromFirestore(doc.data() as Map<String, dynamic>)).toList();
+    } else {
+      // Apply filters as before
+      if (titleFilters.isNotEmpty) {
+        query = query.where('category', arrayContainsAny: titleFilters);
+      }
+
+      if (selectedRegion != null) {
+        query = query.where('region', isEqualTo: selectedRegion);
+      }
+
+      final QuerySnapshot querySnapshot = await query.get();
+      jobs = querySnapshot.docs.map((doc) => Job.fromFirestore(doc.data() as Map<String, dynamic>)).toList();
+
+      // Further filter by job types within Dart code if typeFilters are not empty
+      if (typeFilters.isNotEmpty) {
+        jobs = jobs.where((job) => typeFilters.contains(job.type)).toList();
+      }
     }
 
-    final QuerySnapshot querySnapshot = await query.get();
-    final List<QueryDocumentSnapshot> documents = querySnapshot.docs;
-
     setState(() {
-      _jobs = documents.map((doc) => Job.fromFirestore(doc.data() as Map<String, dynamic>)).toList();
+      _jobs = jobs;
     });
   }
 
