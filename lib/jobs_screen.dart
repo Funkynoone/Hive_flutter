@@ -160,7 +160,7 @@ class _JobsScreenState extends State<JobsScreen> {
     List<String> titleFilters = [];
     List<String> typeFilters = [];
 
-    // Job titles
+    // Adding title filters based on selected options
     if (showService) titleFilters.add('Service');
     if (showManager) titleFilters.add('Manager');
     if (showBar) titleFilters.add('Bar');
@@ -169,45 +169,39 @@ class _JobsScreenState extends State<JobsScreen> {
     if (showCleaning) titleFilters.add('Cleaning');
     if (showCook) titleFilters.add('Cook');
 
-    // Job types
+    // Adding type filters based on selected options
     if (showFullTime) typeFilters.add('Full Time');
     if (showPartTime) typeFilters.add('Part Time');
     if (showSeason) typeFilters.add('Season');
 
-    // Check if no filters are applied
-    bool noFiltersApplied = titleFilters.isEmpty && typeFilters.isEmpty && selectedRegion == null;
-    print("No Filters Applied: $noFiltersApplied");
+    // Apply region filter if a region is selected
+    if (selectedRegion != null) {
+      query = query.where('region', isEqualTo: selectedRegion);
+    }
 
+    // Apply title filters if any are active using 'category' field
+    if (titleFilters.isNotEmpty) {
+      query = query.where('category', arrayContainsAny: titleFilters);
+    }
+
+    // Execute the query
     List<Job> jobs = [];
+    final QuerySnapshot querySnapshot = await query.get();
+    jobs = querySnapshot.docs.map((doc) => Job.fromFirestore(doc.data() as Map<String, dynamic>)).toList();
 
-    if (noFiltersApplied) {
-      // Fetch all documents when no filters are applied
-      final QuerySnapshot querySnapshot = await query.get();
-      jobs = querySnapshot.docs.map((doc) => Job.fromFirestore(doc.data() as Map<String, dynamic>)).toList();
-    } else {
-      // Apply filters as before
-      if (titleFilters.isNotEmpty) {
-        query = query.where('category', arrayContainsAny: titleFilters);
-      }
-
-      if (selectedRegion != null) {
-        query = query.where('region', isEqualTo: selectedRegion);
-      }
-
-      final QuerySnapshot querySnapshot = await query.get();
-      jobs = querySnapshot.docs.map((doc) => Job.fromFirestore(doc.data() as Map<String, dynamic>)).toList();
-
-      // Further filter by job types within Dart code if typeFilters are not empty
-      if (typeFilters.isNotEmpty) {
-        jobs = jobs.where((job) => typeFilters.contains(job.type)).toList();
-      }
+    // Further filter by job types within Dart code if typeFilters are not empty
+    if (typeFilters.isNotEmpty) {
+      jobs = jobs.where((job) => typeFilters.contains(job.type)).toList();
     }
 
     setState(() {
       _jobs = jobs;
     });
-  }
 
+    // Debugging output
+    print("Filters Applied: ${titleFilters.isNotEmpty || typeFilters.isNotEmpty || selectedRegion != null}");
+    print("Jobs Found: ${jobs.length}");
+  }
 
   Widget filterChip(String label, bool isSelected) {
     return FilterChip(
@@ -215,17 +209,38 @@ class _JobsScreenState extends State<JobsScreen> {
       selected: isSelected,
       onSelected: (bool value) {
         setState(() {
-          if (label == 'Service') showService = value;
-          else if (label == 'Manager') showManager = value;
-          else if (label == 'Cook') showCook = value;
-          else if (label == 'Cleaning') showCleaning = value;
-          else if (label == 'Delivery') showDelivery = value;
-          else if (label == 'Bar') showBar = value;
-          else if (label == 'Sommelier') showSommelier = value;
-          else if (label == 'Full Time') showFullTime = value;
-          else if (label == 'Part Time') showPartTime = value;
-          else if (label == 'Season') showSeason = value;
-          // Add more conditions for other filters if needed
+          switch (label) {
+            case 'Service':
+              showService = value;
+              break;
+            case 'Manager':
+              showManager = value;
+              break;
+            case 'Cook':
+              showCook = value;
+              break;
+            case 'Cleaning':
+              showCleaning = value;
+              break;
+            case 'Delivery':
+              showDelivery = value;
+              break;
+            case 'Bar':
+              showBar = value;
+              break;
+            case 'Sommelier':
+              showSommelier = value;
+              break;
+            case 'Full Time':
+              showFullTime = value;
+              break;
+            case 'Part Time':
+              showPartTime = value;
+              break;
+            case 'Season':
+              showSeason = value;
+              break;
+          }
         });
       },
       backgroundColor: Colors.blue.shade100,
