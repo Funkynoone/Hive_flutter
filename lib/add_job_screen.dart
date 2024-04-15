@@ -24,7 +24,7 @@ class _AddJobScreenState extends State<AddJobScreen> {
     'Delivery',
     'Sommelier'
   ];
-  final List<String> jobTypes = ['Full-time', 'Part-time', 'Season'];
+  final List<String> jobTypes = ['Full Time', 'Part Time', 'Season'];
   final List<String> regions = [
     'Attica',
     'Sterea Ellada',
