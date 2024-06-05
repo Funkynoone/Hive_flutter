@@ -4,6 +4,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:hive_flutter/models/job.dart'; // Adjust the path as needed
 
 class JobsScreen extends StatefulWidget {
+  const JobsScreen({super.key});
+
   @override
   _JobsScreenState createState() => _JobsScreenState();
 }
@@ -27,19 +29,19 @@ class _JobsScreenState extends State<JobsScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Jobs'),
+        title: const Text('Jobs'),
         actions: [
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 8.0),
             child: ElevatedButton(
               onPressed: _launchMapsUrl,
-              child: Text('MAP'),
               style: ElevatedButton.styleFrom(
-                primary: Colors.purple,
+                backgroundColor: Colors.purple,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(18.0),
                 ),
               ),
+              child: const Text('MAP'),
             ),
           ),
         ],
@@ -51,7 +53,7 @@ class _JobsScreenState extends State<JobsScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Job Specifications', style: TextStyle(fontSize: 18.0, fontWeight: FontWeight.bold)),
+            const Text('Job Specifications', style: TextStyle(fontSize: 18.0, fontWeight: FontWeight.bold)),
             Wrap(
               spacing: 8.0,
               children: [
@@ -64,8 +66,8 @@ class _JobsScreenState extends State<JobsScreen> {
                 filterChip('Sommelier', showSommelier),
               ],
             ),
-            SizedBox(height: 20),
-            Text('Contract Time', style: TextStyle(fontSize: 18.0, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 20),
+            const Text('Contract Time', style: TextStyle(fontSize: 18.0, fontWeight: FontWeight.bold)),
             Wrap(
               spacing: 8.0,
               children: [
@@ -74,12 +76,12 @@ class _JobsScreenState extends State<JobsScreen> {
                 filterChip('Season', showSeason),
               ],
             ),
-            SizedBox(height: 20),
-            Text('Region Filter', style: TextStyle(fontSize: 18.0, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 20),
+            const Text('Region Filter', style: TextStyle(fontSize: 18.0, fontWeight: FontWeight.bold)),
             DropdownButton<String>(
               isExpanded: true,
               value: selectedRegion,
-              hint: Text('Select Region'),
+              hint: const Text('Select Region'),
               onChanged: (String? newValue) {
                 setState(() {
                   selectedRegion = newValue;
@@ -92,27 +94,27 @@ class _JobsScreenState extends State<JobsScreen> {
                 );
               }).toList(),
             ),
-            SizedBox(height: 20),
+            const SizedBox(height: 20),
             ElevatedButton(
               onPressed: _searchJobs,
-              child: Text('SEARCH'),
               style: ElevatedButton.styleFrom(
-                primary: Colors.purple,
-                minimumSize: Size(double.infinity, 36),
+                backgroundColor: Colors.purple,
+                minimumSize: const Size(double.infinity, 36),
               ),
+              child: const Text('SEARCH'),
             ),
             ElevatedButton(
               onPressed: _clearFilters,
-              child: Text('CLEAR FILTERS'),
               style: ElevatedButton.styleFrom(
-                primary: Colors.grey,
-                minimumSize: Size(double.infinity, 36),
+                backgroundColor: Colors.grey,
+                minimumSize: const Size(double.infinity, 36),
               ),
+              child: const Text('CLEAR FILTERS'),
             ),
             _jobs.isNotEmpty
                 ? ListView.builder(
               shrinkWrap: true,
-              physics: NeverScrollableScrollPhysics(),
+              physics: const NeverScrollableScrollPhysics(),
               itemCount: _jobs.length,
               itemBuilder: (context, index) {
                 final job = _jobs[index];
@@ -123,7 +125,7 @@ class _JobsScreenState extends State<JobsScreen> {
                 );
               },
             )
-                : Center(child: Text("No jobs found")),
+                : const Center(child: Text("No jobs found")),
           ],
         ),
       ),
@@ -135,7 +137,7 @@ class _JobsScreenState extends State<JobsScreen> {
     if (await canLaunch(googleMapsUrl)) {
       await launch(googleMapsUrl);
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not open Google Maps.')));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not open Google Maps.')));
     }
   }
 
@@ -246,7 +248,7 @@ class _JobsScreenState extends State<JobsScreen> {
       backgroundColor: Colors.blue.shade100,
       selectedColor: Colors.blue.shade400,
       labelStyle: TextStyle(color: isSelected ? Colors.white : Colors.black),
-      shape: StadiumBorder(side: BorderSide(color: Colors.blue)),
+      shape: const StadiumBorder(side: BorderSide(color: Colors.blue)),
     );
   }
 }

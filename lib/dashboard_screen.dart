@@ -6,6 +6,8 @@ import 'package:hive_flutter/jobs_screen.dart';
 import 'package:hive_flutter/add_job_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
+  const DashboardScreen({super.key});
+
   @override
   _DashboardScreenState createState() => _DashboardScreenState();
 }
@@ -38,9 +40,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
   void _initializeScreens() {
     // Assume isBusinessOwner is already defined based on user role
     List<Widget> screens = [
-      Center(child: Text('Explore Screen')), // Placeholder for ExploreScreen
-      JobsScreen(),
-      Center(child: Text('Saved Screen')), // Placeholder for SavedScreen
+      const Center(child: Text('Explore Screen')), // Placeholder for ExploreScreen
+      const JobsScreen(),
+      const Center(child: Text('Saved Screen')), // Placeholder for SavedScreen
       ProfileScreen(onLogout: () async {
         await FirebaseAuth.instance.signOut();
         // Navigate to your login screen
@@ -50,7 +52,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
     // Conditionally add the AddJobScreen
     if (isBusinessOwner) {
-      screens.insert(2, AddJobScreen()); // Insert at desired position
+      screens.insert(2, const AddJobScreen()); // Insert at desired position
     }
 
     setState(() {
@@ -63,16 +65,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Widget build(BuildContext context) {
     // Define BottomNavigationBarItems based on the user's role
     List<BottomNavigationBarItem> navBarItems = [
-      BottomNavigationBarItem(icon: Icon(Icons.explore), label: 'Explore'),
-      BottomNavigationBarItem(icon: Icon(Icons.work), label: 'Jobs'),
-      if (isBusinessOwner) BottomNavigationBarItem(icon: Icon(Icons.add_circle_outline), label: 'Add Post'),
-      BottomNavigationBarItem(icon: Icon(Icons.save_alt), label: 'Saved'),
-      BottomNavigationBarItem(icon: Icon(Icons.account_circle), label: 'Profile'),
+      const BottomNavigationBarItem(icon: Icon(Icons.explore), label: 'Explore'),
+      const BottomNavigationBarItem(icon: Icon(Icons.work), label: 'Jobs'),
+      if (isBusinessOwner) const BottomNavigationBarItem(icon: Icon(Icons.add_circle_outline), label: 'Add Post'),
+      const BottomNavigationBarItem(icon: Icon(Icons.save_alt), label: 'Saved'),
+      const BottomNavigationBarItem(icon: Icon(Icons.account_circle), label: 'Profile'),
     ];
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('App'), // Adjust based on the selected screen if needed
+        title: const Text('App'), // Adjust based on the selected screen if needed
       ),
       body: IndexedStack(
         index: _selectedIndex,

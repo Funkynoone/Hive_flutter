@@ -10,10 +10,12 @@ void main() async {
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
-  runApp(MyApp());
+  runApp(const MyApp());
 }
 
 class MyApp extends StatelessWidget {
+  const MyApp({super.key});
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -24,8 +26,8 @@ class MyApp extends StatelessWidget {
       // Use named routes to manage navigation
       initialRoute: FirebaseAuth.instance.currentUser == null ? '/login' : '/dashboard',
       routes: {
-        '/dashboard': (context) => DashboardScreen(),
-        '/login': (context) => LoginScreen(), // Ensure you have a LoginScreen widget
+        '/dashboard': (context) => const DashboardScreen(),
+        '/login': (context) => const LoginScreen(), // Ensure you have a LoginScreen widget
         // Define other routes as needed
       },
     );

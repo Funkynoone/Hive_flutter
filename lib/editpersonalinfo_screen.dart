@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'dart:io';
 
 class EditPersonalInfoScreen extends StatefulWidget {
+  const EditPersonalInfoScreen({super.key});
+
   @override
   _EditPersonalInfoScreenState createState() => _EditPersonalInfoScreenState();
 }
@@ -43,7 +44,7 @@ class _EditPersonalInfoScreenState extends State<EditPersonalInfoScreen> {
         'email': _emailController.text.trim(),
         'phone': _phoneController.text.trim(),
       }).then((_) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Info updated')));
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Info updated')));
         Navigator.of(context).pop();
       }).catchError((error) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Update failed: $error')));
@@ -55,33 +56,33 @@ class _EditPersonalInfoScreenState extends State<EditPersonalInfoScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Edit Personal Info'),
+        title: const Text('Edit Personal Info'),
       ),
       body: SingleChildScrollView(
-        padding: EdgeInsets.all(16),
+        padding: const EdgeInsets.all(16),
         child: Form(
           key: _formKey,
           child: Column(
             children: [
               TextFormField(
                 controller: _usernameController,
-                decoration: InputDecoration(labelText: 'Username'),
+                decoration: const InputDecoration(labelText: 'Username'),
                 validator: (value) => value!.isEmpty ? 'Please enter a username' : null,
               ),
               TextFormField(
                 controller: _emailController,
-                decoration: InputDecoration(labelText: 'Email'),
+                decoration: const InputDecoration(labelText: 'Email'),
                 validator: (value) => value!.isEmpty ? 'Please enter an email' : null,
               ),
               TextFormField(
                 controller: _phoneController,
-                decoration: InputDecoration(labelText: 'Phone'),
+                decoration: const InputDecoration(labelText: 'Phone'),
                 validator: (value) => value!.isEmpty ? 'Please enter a phone number' : null,
               ),
-              SizedBox(height: 20),
+              const SizedBox(height: 20),
               ElevatedButton(
                 onPressed: _saveUserInfo,
-                child: Text('Save Changes'),
+                child: const Text('Save Changes'),
               ),
             ],
           ),

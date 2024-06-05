@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 
 class AddJobScreen extends StatefulWidget {
+  const AddJobScreen({super.key});
+
   @override
   _AddJobScreenState createState() => _AddJobScreenState();
 }
@@ -49,10 +50,10 @@ class _AddJobScreenState extends State<AddJobScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Add Job Offer'),
+        title: const Text('Add Job Offer'),
       ),
       body: SingleChildScrollView(
-        padding: EdgeInsets.all(16),
+        padding: const EdgeInsets.all(16),
         child: Form(
           key: _formKey,
           child: Column(
@@ -60,7 +61,7 @@ class _AddJobScreenState extends State<AddJobScreen> {
             children: <Widget>[
               DropdownButtonFormField<String>(
                 value: _selectedJobTitle,
-                decoration: InputDecoration(
+                decoration: const InputDecoration(
                     labelText: 'Job Title', border: OutlineInputBorder()),
                 onChanged: (value) {
                   setState(() {
@@ -76,7 +77,7 @@ class _AddJobScreenState extends State<AddJobScreen> {
               ),
               DropdownButtonFormField<String>(
                 value: _selectedJobType,
-                decoration: InputDecoration(
+                decoration: const InputDecoration(
                     labelText: 'Job Type', border: OutlineInputBorder()),
                 onChanged: (value) {
                   setState(() {
@@ -92,7 +93,7 @@ class _AddJobScreenState extends State<AddJobScreen> {
               ),
               DropdownButtonFormField<String>(
                 value: _selectedRegion,
-                decoration: InputDecoration(
+                decoration: const InputDecoration(
                   labelText: "Region",
                   border: OutlineInputBorder(),
                 ),
@@ -110,7 +111,7 @@ class _AddJobScreenState extends State<AddJobScreen> {
               ),
               TextFormField(
                 controller: _jobDescriptionController,
-                decoration: InputDecoration(
+                decoration: const InputDecoration(
                     labelText: 'Job Description', border: OutlineInputBorder()),
                 maxLines: 6,
                 validator: (value) =>
@@ -118,13 +119,13 @@ class _AddJobScreenState extends State<AddJobScreen> {
                     ? 'Please enter a job description'
                     : null,
               ),
-              SizedBox(height: 20),
+              const SizedBox(height: 20),
               ElevatedButton(
                 onPressed: _addJobOffer,
-                child: Text('Add Job Offer'),
-                style: ElevatedButton.styleFrom(primary: Theme
+                style: ElevatedButton.styleFrom(backgroundColor: Theme
                     .of(context)
                     .primaryColor),
+                child: const Text('Add Job Offer'),
               ),
             ],
           ),
@@ -156,7 +157,7 @@ class _AddJobScreenState extends State<AddJobScreen> {
         'category': category,
       }).then((result) {
         ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Job offer added successfully')));
+            const SnackBar(content: Text('Job offer added successfully')));
       }).catchError((error) {
         ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text('Failed to add job offer: $error')));

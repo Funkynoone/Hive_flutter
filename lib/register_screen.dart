@@ -7,6 +7,8 @@ import 'package:fluttertoast/fluttertoast.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 class RegisterScreen extends StatefulWidget {
+  const RegisterScreen({super.key});
+
   @override
   _RegisterScreenState createState() => _RegisterScreenState();
 }
@@ -27,10 +29,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Register'),
+        title: const Text('Register'),
       ),
       body: SingleChildScrollView(
-        padding: EdgeInsets.all(16.0),
+        padding: const EdgeInsets.all(16.0),
         child: Form(
           key: _formKey,
           child: Column(
@@ -50,7 +52,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
               if (isBusinessOwner)
                 TextFormField(
                   controller: _locationController,
-                  decoration: InputDecoration(
+                  decoration: const InputDecoration(
                     labelText: 'Restaurant Location',
                     suffixIcon: Icon(Icons.search),
                   ),
@@ -72,25 +74,25 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 ),
               TextFormField(
                 controller: _usernameController,
-                decoration: InputDecoration(labelText: 'Username'),
+                decoration: const InputDecoration(labelText: 'Username'),
               ),
               TextFormField(
                 controller: _emailController,
-                decoration: InputDecoration(labelText: 'Email'),
+                decoration: const InputDecoration(labelText: 'Email'),
                 keyboardType: TextInputType.emailAddress,
               ),
               TextFormField(
                 controller: _passwordController,
-                decoration: InputDecoration(labelText: 'Password'),
+                decoration: const InputDecoration(labelText: 'Password'),
                 obscureText: true,
               ),
               TextFormField(
                 controller: _confirmPasswordController,
-                decoration: InputDecoration(labelText: 'Confirm Password'),
+                decoration: const InputDecoration(labelText: 'Confirm Password'),
                 obscureText: true,
               ),
               ElevatedButton(
-                child: Text('Register'),
+                child: const Text('Register'),
                 onPressed: () async {
                   if (_formKey.currentState!.validate()) {
                     // Registration logic
@@ -129,8 +131,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
       return;
     }
 
-    GoogleMapsPlaces _places = GoogleMapsPlaces(apiKey: "AIzaSyAL3YGfLOU2Ihv0i26NK41MQTFfUJ_l_TY"); // Use your actual API key
-    PlacesDetailsResponse detail = await _places.getDetailsByPlaceId(p.placeId!);
+    GoogleMapsPlaces places = GoogleMapsPlaces(apiKey: "AIzaSyAL3YGfLOU2Ihv0i26NK41MQTFfUJ_l_TY"); // Use your actual API key
+    PlacesDetailsResponse detail = await places.getDetailsByPlaceId(p.placeId!);
 
     if (detail.status == "OK") {
       final lat = detail.result.geometry!.location.lat;

@@ -9,7 +9,7 @@ import 'editpersonalinfo_screen.dart';
 class ProfileScreen extends StatefulWidget {
   final VoidCallback onLogout;
 
-  const ProfileScreen({Key? key, required this.onLogout}) : super(key: key);
+  const ProfileScreen({super.key, required this.onLogout});
   @override
   _ProfileScreenState createState() => _ProfileScreenState();
 }
@@ -21,7 +21,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   late String _userName;
   late String _userEmail;
   late String _userPhone;
-  ImageProvider? _profileImage = AssetImage('assets/profileimage.png'); // Update to use your asset
+  ImageProvider? _profileImage = const AssetImage('assets/profileimage.png'); // Update to use your asset
 
   @override
   void initState() {
@@ -56,7 +56,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Profile'),
+        title: const Text('Profile'),
       ),
       body: SingleChildScrollView(
         child: Center(
@@ -68,7 +68,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
               ElevatedButton(
                 onPressed: _changeProfilePicture,
-                child: Text('Change Picture'),
+                child: const Text('Change Picture'),
               ),
               Text(_userName),
               Text(_userEmail),
@@ -78,15 +78,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   // Navigate to Edit Personal Info Screen
                   Navigator.push(
                     context,
-                    MaterialPageRoute(builder: (context) => EditPersonalInfoScreen()),
+                    MaterialPageRoute(builder: (context) => const EditPersonalInfoScreen()),
                   );
                 },
-                child: Text('Edit Personal Info'),
+                child: const Text('Edit Personal Info'),
               ),
               Row(
                 mainAxisSize: MainAxisSize.min,
                 children: List.generate(5, (index) {
-                  return Icon(Icons.star, color: Colors.amber);
+                  return const Icon(Icons.star, color: Colors.amber);
                 }),
               ),
               ElevatedButton(
@@ -94,10 +94,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   FirebaseAuth.instance.signOut();
                   Navigator.pushReplacementNamed(context, '/login');
                 },
-                child: Text('Log Out'),
                 style: ElevatedButton.styleFrom(
-                  primary: Colors.red,
+                  backgroundColor: Colors.red,
                 ),
+                child: const Text('Log Out'),
               ),
             ],
           ),
