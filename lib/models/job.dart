@@ -5,7 +5,8 @@ class Job {
   final String description;
   final double latitude;
   final double longitude;
-  final List<String> category; // Changed to a list
+  final List<String> category;
+  final String imageUrl; // Add this line
 
   Job({
     required this.title,
@@ -14,7 +15,8 @@ class Job {
     required this.description,
     required this.latitude,
     required this.longitude,
-    required this.category, // Changed to a list
+    required this.category,
+    required this.imageUrl, // Add this line
   });
 
   factory Job.fromFirestore(Map<String, dynamic> firestore) {
@@ -25,7 +27,8 @@ class Job {
       description: firestore['description'] ?? '',
       latitude: firestore['latitude'] ?? 0.0,
       longitude: firestore['longitude'] ?? 0.0,
-      category: List<String>.from(firestore['category'] ?? []), // Adjusted for a list
+      category: List<String>.from(firestore['category'] ?? []),
+      imageUrl: firestore['imageUrl'] ?? 'https://via.placeholder.com/50', // Add this line
     );
   }
 }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:hive_flutter/models/job.dart'; // Adjust the path as needed
+import 'job_card.dart'; // Import the JobCard widget
 
 class JobsScreen extends StatefulWidget {
   const JobsScreen({super.key});
@@ -22,7 +23,9 @@ class _JobsScreenState extends State<JobsScreen> {
   bool showCleaning = false;
   bool showCook = false;
   String? selectedRegion;
-  final List<String> regions = ['Attica', 'Sterea Ellada', 'Peloponnisus', 'Epirus', 'Thessalia', 'Thraki', 'Ionian islands', 'Aegean islands', 'Creta'];
+  final List<String> regions = [
+    'Attica', 'Sterea Ellada', 'Peloponnisus', 'Epirus', 'Thessalia', 'Thraki', 'Ionian islands', 'Aegean islands', 'Creta'
+  ];
   List<Job> _jobs = [];
 
   @override
@@ -111,6 +114,7 @@ class _JobsScreenState extends State<JobsScreen> {
               ),
               child: const Text('CLEAR FILTERS'),
             ),
+            const SizedBox(height: 20),
             _jobs.isNotEmpty
                 ? ListView.builder(
               shrinkWrap: true,
@@ -118,11 +122,7 @@ class _JobsScreenState extends State<JobsScreen> {
               itemCount: _jobs.length,
               itemBuilder: (context, index) {
                 final job = _jobs[index];
-                return ListTile(
-                  title: Text(job.title),
-                  subtitle: Text('${job.restaurant} - ${job.type} - ${job.category}'),
-                  onTap: () {/* Navigate to job detail */},
-                );
+                return JobCard(job: job);
               },
             )
                 : const Center(child: Text("No jobs found")),
@@ -154,8 +154,10 @@ class _JobsScreenState extends State<JobsScreen> {
       showCleaning = false;
       showCook = false;
       selectedRegion = null;
+      _jobs = [];
     });
   }
+
   void _searchJobs() async {
     Query query = FirebaseFirestore.instance.collection('JobListings');
 
