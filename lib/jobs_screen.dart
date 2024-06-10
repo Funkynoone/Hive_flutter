@@ -3,6 +3,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:hive_flutter/models/job.dart'; // Adjust the path as needed
 import 'job_card.dart'; // Import the JobCard widget
+import 'map_screen.dart'; // Import the MapScreen widget
 
 class JobsScreen extends StatefulWidget {
   const JobsScreen({super.key});
@@ -37,7 +38,14 @@ class _JobsScreenState extends State<JobsScreen> {
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 8.0),
             child: ElevatedButton(
-              onPressed: _launchMapsUrl,
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => MapScreen(jobs: _jobs),
+                  ),
+                );
+              },
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.purple,
                 shape: RoundedRectangleBorder(
@@ -130,15 +138,6 @@ class _JobsScreenState extends State<JobsScreen> {
         ),
       ),
     );
-  }
-
-  void _launchMapsUrl() async {
-    const googleMapsUrl = "https://www.google.com/maps/search/?api=1&query=Greece";
-    if (await canLaunch(googleMapsUrl)) {
-      await launch(googleMapsUrl);
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not open Google Maps.')));
-    }
   }
 
   void _clearFilters() {

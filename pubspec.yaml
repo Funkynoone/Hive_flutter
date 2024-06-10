@@ -5,7 +5,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 version: 1.0.0+1
 
 environment:
-  sdk: '>=2.18.0 <3.0.0' # Updated to a stable version range for Flutter 3
+  sdk: '>=2.18.0 <3.0.0'
 
 dependencies:
   flutter:
@@ -21,6 +21,9 @@ dependencies:
   fluttertoast: ^8.0.8
   shared_preferences: ^2.2.2
   image_picker: ^1.0.7
+  flutter_map: ^4.0.0  # Downgrade to a version compatible with http ^0.13.1
+  latlong2: ^0.8.1
+  http: ^0.13.1
 
 dev_dependencies:
   flutter_test:
@@ -31,18 +34,3 @@ flutter:
   uses-material-design: true
   assets:
     - assets/profileimage.png
-
-  # Add any assets your app needs here:
-  #assets:
-  # - images/logo.png
-  # - assets/config.json
-
-  # Uncomment and add any fonts your app needs here:
-  # fonts:
-  #   - family: Open Sans
-  #     fonts:
-  #       - asset: fonts/OpenSans-Regular.ttf
-  #       - asset: fonts/OpenSans-Italic.ttf
-  #         style: italic
-  #       - asset: fonts/OpenSans-Bold.ttf
-  #         weight: 700
