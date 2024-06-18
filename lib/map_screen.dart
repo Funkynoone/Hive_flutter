@@ -2,11 +2,27 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:hive_flutter/models/job.dart'; // Adjust the path as needed
+import 'dart:math';
 
 class MapScreen extends StatelessWidget {
   final List<Job> jobs;
 
   MapScreen({required this.jobs});
+
+  // Function to generate random coordinates within Greece
+  LatLng getRandomCoordinates() {
+    final random = Random();
+    // Latitude and longitude ranges for Greece
+    double minLat = 34.802075;
+    double maxLat = 41.748833;
+    double minLng = 19.64761;
+    double maxLng = 29.62912;
+
+    double latitude = minLat + (maxLat - minLat) * random.nextDouble();
+    double longitude = minLng + (maxLng - minLng) * random.nextDouble();
+
+    return LatLng(latitude, longitude);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -29,11 +45,31 @@ class MapScreen extends StatelessWidget {
           ),
           MarkerLayer(
             markers: jobs.map((job) {
+              // Use random coordinates for each job
+              LatLng randomCoordinates = getRandomCoordinates();
+              print("Creating marker for job: ${job.title} at (${randomCoordinates.latitude}, ${randomCoordinates.longitude})");
+
               return Marker(
                 width: 80.0,
                 height: 80.0,
-                point: LatLng(job.latitude, job.longitude),
-                builder: (ctx) => Container(
+                point: randomCoordinates,
+                builder: (ctx) => GestureDetector(
+                  onTap: () {
+                    // Display job details or navigate to a detailed view
+                    showDialog(
+                      context: context,
+                      builder: (context) => AlertDialog(
+                        title: Text(job.title),
+                        content: Text('${job.restaurant}\n${job.description}'),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.of(context).pop(),
+                            child: Text('Close'),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
                   child: Icon(
                     Icons.location_on,
                     color: Colors.red,

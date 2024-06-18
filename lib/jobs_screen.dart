@@ -33,31 +33,30 @@ class _JobsScreenState extends State<JobsScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Jobs'),
-        actions: [
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8.0),
-            child: ElevatedButton(
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => MapScreen(jobs: _jobs),
-                  ),
-                );
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.purple,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(18.0),
-                ),
-              ),
-              child: const Text('MAP'),
-            ),
-          ),
-        ],
         backgroundColor: Colors.white,
         elevation: 0,
+        centerTitle: true,
+        title: TextButton(
+          onPressed: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => MapScreen(jobs: _jobs),
+              ),
+            );
+          },
+          style: TextButton.styleFrom(
+            backgroundColor: Color(0xFFF4A261), // Sand yellow color
+            padding: EdgeInsets.symmetric(vertical: 8.0, horizontal: 24.0),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(18.0),
+            ),
+          ),
+          child: const Text(
+            'MAP',
+            style: TextStyle(color: Colors.black),
+          ),
+        ),
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16.0),
@@ -109,7 +108,7 @@ class _JobsScreenState extends State<JobsScreen> {
             ElevatedButton(
               onPressed: _searchJobs,
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.purple,
+                backgroundColor: Color(0xFFF4A261),
                 minimumSize: const Size(double.infinity, 36),
               ),
               child: const Text('SEARCH'),
@@ -117,7 +116,7 @@ class _JobsScreenState extends State<JobsScreen> {
             ElevatedButton(
               onPressed: _clearFilters,
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.grey,
+                backgroundColor: Color(0xFFF4A261),
                 minimumSize: const Size(double.infinity, 36),
               ),
               child: const Text('CLEAR FILTERS'),
