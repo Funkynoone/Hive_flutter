@@ -8,7 +8,7 @@ import 'dart:ui' as ui; // Import dart:ui for Path
 class MapScreen extends StatelessWidget {
   final List<Job> jobs;
 
-  MapScreen({required this.jobs});
+  const MapScreen({super.key, required this.jobs});
 
   // Function to generate random coordinates within Greece
   LatLng getRandomCoordinates() {
@@ -29,7 +29,7 @@ class MapScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Map'),
+        title: const Text('Map'),
       ),
       body: FlutterMap(
         options: MapOptions(
@@ -39,7 +39,7 @@ class MapScreen extends StatelessWidget {
         children: [
           TileLayer(
             urlTemplate: "https://api.mapbox.com/styles/v1/{id}/tiles/{z}/{x}/{y}?access_token={accessToken}",
-            additionalOptions: {
+            additionalOptions: const {
               'accessToken': 'pk.eyJ1IjoiYW5hbmlhczEzIiwiYSI6ImNseDliMjJvYTJoYWcyanF1ZHoybGViYzMifQ.nJ8im-LnmEld5GrEDBaeUQ', // Replace with your Mapbox access token
               'id': 'mapbox/streets-v11',
             },
@@ -64,21 +64,21 @@ class MapScreen extends StatelessWidget {
                         content: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Text('${job.restaurant}'),
-                            Text('${job.description}'),
+                            Text(job.restaurant),
+                            Text(job.description),
                             ElevatedButton(
                               onPressed: () {
                                 Navigator.of(context).pop();
                                 // Navigate to detailed view or other actions
                               },
-                              child: Text('Details'),
+                              child: const Text('Details'),
                             ),
                           ],
                         ),
                         actions: [
                           TextButton(
                             onPressed: () => Navigator.of(context).pop(),
-                            child: Text('Close'),
+                            child: const Text('Close'),
                           ),
                         ],
                       ),
@@ -91,11 +91,11 @@ class MapScreen extends StatelessWidget {
                         child: CustomPaint(
                           painter: BubblePainter(),
                           child: Container(
-                            padding: EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
+                            padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
                             decoration: BoxDecoration(
                               color: Colors.white,
                               borderRadius: BorderRadius.circular(15.0),
-                              boxShadow: [
+                              boxShadow: const [
                                 BoxShadow(
                                   color: Colors.black26,
                                   blurRadius: 3.0,
@@ -106,7 +106,7 @@ class MapScreen extends StatelessWidget {
                             ),
                             child: Text(
                               job.title,
-                              style: TextStyle(
+                              style: const TextStyle(
                                 color: Colors.black,
                                 fontWeight: FontWeight.bold,
                               ),

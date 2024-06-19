@@ -5,7 +5,7 @@ import 'job_detail_screen.dart'; // Adjust the path as needed
 class JobCard extends StatefulWidget {
   final Job job;
 
-  const JobCard({required this.job});
+  const JobCard({super.key, required this.job});
 
   @override
   _JobCardState createState() => _JobCardState();

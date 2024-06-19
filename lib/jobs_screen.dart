@@ -3,7 +3,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:hive_flutter/models/job.dart'; // Adjust the path as needed
 import 'job_card.dart'; // Import the JobCard widget
-import 'map_screen.dart'; // Import the MapScreen widget
+import 'map_filter_screen.dart'; // Import the MapFilterScreen widget
 
 class JobsScreen extends StatefulWidget {
   const JobsScreen({super.key});
@@ -41,7 +41,7 @@ class _JobsScreenState extends State<JobsScreen> {
             Navigator.push(
               context,
               MaterialPageRoute(
-                builder: (context) => MapScreen(jobs: _jobs),
+                builder: (context) => const MapFilterScreen(),
               ),
             );
           },
@@ -108,7 +108,7 @@ class _JobsScreenState extends State<JobsScreen> {
             ElevatedButton(
               onPressed: _searchJobs,
               style: ElevatedButton.styleFrom(
-                backgroundColor: Color(0xFFF4A261),
+                backgroundColor: Colors.purple,
                 minimumSize: const Size(double.infinity, 36),
               ),
               child: const Text('SEARCH'),
@@ -116,7 +116,7 @@ class _JobsScreenState extends State<JobsScreen> {
             ElevatedButton(
               onPressed: _clearFilters,
               style: ElevatedButton.styleFrom(
-                backgroundColor: Color(0xFFF4A261),
+                backgroundColor: Colors.grey,
                 minimumSize: const Size(double.infinity, 36),
               ),
               child: const Text('CLEAR FILTERS'),
