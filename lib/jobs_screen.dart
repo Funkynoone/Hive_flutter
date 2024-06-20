@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:url_launcher/url_launcher.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:hive_flutter/models/job.dart'; // Adjust the path as needed
 import 'job_card.dart'; // Import the JobCard widget
@@ -46,8 +45,8 @@ class _JobsScreenState extends State<JobsScreen> {
             );
           },
           style: TextButton.styleFrom(
-            backgroundColor: Color(0xFFF4A261), // Sand yellow color
-            padding: EdgeInsets.symmetric(vertical: 8.0, horizontal: 24.0),
+            backgroundColor: const Color(0xFFF4A261), // Sand yellow color
+            padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 24.0),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(18.0),
             ),
@@ -187,9 +186,8 @@ class _JobsScreenState extends State<JobsScreen> {
     }
 
     // Execute the query
-    List<Job> jobs = [];
     final QuerySnapshot querySnapshot = await query.get();
-    jobs = querySnapshot.docs.map((doc) => Job.fromFirestore(doc.data() as Map<String, dynamic>)).toList();
+    List<Job> jobs = querySnapshot.docs.map((doc) => Job.fromFirestore(doc.data() as Map<String, dynamic>, doc.id)).toList();
 
     // Further filter by job types within Dart code if typeFilters are not empty
     if (typeFilters.isNotEmpty) {

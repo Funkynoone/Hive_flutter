@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/models/job.dart'; // Adjust the path as needed
+import 'application_form.dart'; // Adjust the path as needed
 import 'job_detail_screen.dart'; // Adjust the path as needed
 
 class JobCard extends StatefulWidget {
@@ -63,16 +64,30 @@ class _JobCardState extends State<JobCard> {
                   style: const TextStyle(fontSize: 14),
                 ),
                 const SizedBox(height: 8),
-                ElevatedButton(
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => JobDetailScreen(job: widget.job),
-                      ),
-                    );
-                  },
-                  child: const Text('See Details'),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    ElevatedButton(
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => JobDetailScreen(job: widget.job),
+                          ),
+                        );
+                      },
+                      child: const Text('See Details'),
+                    ),
+                    ElevatedButton(
+                      onPressed: () {
+                        showDialog(
+                          context: context,
+                          builder: (context) => ApplicationForm(job: widget.job),
+                        );
+                      },
+                      child: const Text('Send Application'),
+                    ),
+                  ],
                 ),
               ],
             ],

@@ -1,14 +1,16 @@
 class Job {
+  final String id;
   final String title;
   final String restaurant;
   final String type;
   final String description;
-  final double latitude;
-  final double longitude;
+  double latitude; // Make these fields mutable
+  double longitude; // Make these fields mutable
   final List<String> category;
-  final String imageUrl; // Add this line
+  final String imageUrl;
 
   Job({
+    required this.id,
     required this.title,
     required this.restaurant,
     required this.type,
@@ -16,11 +18,12 @@ class Job {
     required this.latitude,
     required this.longitude,
     required this.category,
-    required this.imageUrl, // Add this line
+    required this.imageUrl,
   });
 
-  factory Job.fromFirestore(Map<String, dynamic> firestore) {
+  factory Job.fromFirestore(Map<String, dynamic> firestore, String id) {
     return Job(
+      id: id,
       title: firestore['title'] ?? '',
       restaurant: firestore['restaurant'] ?? '',
       type: firestore['type'] ?? '',
@@ -28,7 +31,7 @@ class Job {
       latitude: firestore['latitude'] ?? 0.0,
       longitude: firestore['longitude'] ?? 0.0,
       category: List<String>.from(firestore['category'] ?? []),
-      imageUrl: firestore['imageUrl'] ?? 'https://via.placeholder.com/50', // Add this line
+      imageUrl: firestore['imageUrl'] ?? 'https://via.placeholder.com/50',
     );
   }
 }
