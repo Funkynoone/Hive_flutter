@@ -5,6 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:hive_flutter/jobs_screen.dart';
 import 'package:hive_flutter/add_job_screen.dart';
 import 'package:hive_flutter/saved_jobs_screen.dart'; // Import the SavedJobsScreen
+import 'package:hive_flutter/application_manager_screen.dart'; // Import the ApplicationManagerScreen
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -69,6 +70,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('App'),
+        leading: isBusinessOwner
+            ? IconButton(
+          icon: Icon(Icons.mail_outline),
+          onPressed: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => ApplicationManagerScreen(ownerId: FirebaseAuth.instance.currentUser!.uid),
+              ),
+            );
+          },
+        )
+            : null,
       ),
       body: IndexedStack(
         index: _selectedIndex,
