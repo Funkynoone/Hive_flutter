@@ -4,7 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:hive_flutter/jobs_screen.dart';
 import 'package:hive_flutter/add_job_screen.dart';
-import 'application_manager_screen.dart'; // Import the Application Manager Screen
+import 'package:hive_flutter/saved_jobs_screen.dart'; // Import the SavedJobsScreen
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -15,18 +15,17 @@ class DashboardScreen extends StatefulWidget {
 
 class _DashboardScreenState extends State<DashboardScreen> {
   int _selectedIndex = 0;
-  bool isBusinessOwner = false; // This will be set based on the logged-in user's role
+  bool isBusinessOwner = false;
 
   late final List<Widget> _screens;
 
   @override
   void initState() {
     super.initState();
-    fetchUserRole(); // Function to determine if the user is a business owner
+    fetchUserRole();
   }
 
   void fetchUserRole() async {
-    // Assuming you're storing the user's role in Firestore
     final user = FirebaseAuth.instance.currentUser;
     if (user != null) {
       final docSnapshot = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
@@ -39,18 +38,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   void _initializeScreens() {
     List<Widget> screens = [
-      const Center(child: Text('Explore Screen')), // Placeholder for ExploreScreen
+      const Center(child: Text('Explore Screen')),
       const JobsScreen(),
-      const Center(child: Text('Saved Screen')), // Placeholder for SavedScreen
+      const SavedJobsScreen(), // Add SavedJobsScreen
       ProfileScreen(onLogout: () async {
         await FirebaseAuth.instance.signOut();
         Navigator.pushReplacementNamed(context, '/login');
       }),
     ];
 
-    // Conditionally add the AddJobScreen
     if (isBusinessOwner) {
-      screens.insert(2, const AddJobScreen()); // Insert at desired position
+      screens.insert(2, const AddJobScreen());
     }
 
     setState(() {
@@ -71,23 +69,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('App'),
-        actions: [
-          if (isBusinessOwner)
-            IconButton(
-              icon: Icon(Icons.assignment),
-              onPressed: () {
-                final user = FirebaseAuth.instance.currentUser;
-                if (user != null) {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => ApplicationManagerScreen(ownerId: user.uid),
-                    ),
-                  );
-                }
-              },
-            ),
-        ],
       ),
       body: IndexedStack(
         index: _selectedIndex,

@@ -34,4 +34,17 @@ class Job {
       imageUrl: firestore['imageUrl'] ?? 'https://via.placeholder.com/50',
     );
   }
+
+  Map<String, dynamic> toFirestore() {
+    return {
+      'title': title,
+      'restaurant': restaurant,
+      'type': type,
+      'description': description,
+      'latitude': latitude,
+      'longitude': longitude,
+      'category': category,
+      'imageUrl': imageUrl,
+    };
+  }
 }

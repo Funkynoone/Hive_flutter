@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:hive_flutter/models/job.dart'; // Adjust the path as needed
-import 'application_form.dart'; // Adjust the path as needed
 import 'job_detail_screen.dart'; // Adjust the path as needed
 
 class JobCard extends StatefulWidget {
@@ -13,7 +14,49 @@ class JobCard extends StatefulWidget {
 }
 
 class _JobCardState extends State<JobCard> {
-  bool isExpanded = false;
+  bool isSaved = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkIfSaved();
+  }
+
+  void _checkIfSaved() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      final doc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .collection('savedJobs')
+          .doc(widget.job.id)
+          .get();
+      setState(() {
+        isSaved = doc.exists;
+      });
+    }
+  }
+
+  void _toggleSaveJob() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      final docRef = FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .collection('savedJobs')
+          .doc(widget.job.id);
+
+      if (isSaved) {
+        await docRef.delete();
+      } else {
+        await docRef.set(widget.job.toFirestore());
+      }
+
+      setState(() {
+        isSaved = !isSaved;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -22,74 +65,46 @@ class _JobCardState extends State<JobCard> {
       margin: const EdgeInsets.symmetric(vertical: 8),
       child: InkWell(
         onTap: () {
-          setState(() {
-            isExpanded = !isExpanded;
-          });
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => JobDetailScreen(job: widget.job),
+            ),
+          );
         },
         child: Padding(
           padding: const EdgeInsets.all(16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          child: Row(
             children: [
-              Row(
-                children: [
-                  Image.network(
-                    widget.job.imageUrl,
-                    width: 50,
-                    height: 50,
-                    fit: BoxFit.cover,
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          widget.job.title,
-                          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                        ),
-                        Text(
-                          '${widget.job.restaurant} - ${widget.job.type} - ${widget.job.category.join(', ')}',
-                          style: const TextStyle(fontSize: 16, color: Colors.grey),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
+              Image.network(
+                widget.job.imageUrl,
+                width: 50,
+                height: 50,
+                fit: BoxFit.cover,
               ),
-              if (isExpanded) ...[
-                const SizedBox(height: 8),
-                Text(
-                  widget.job.description,
-                  style: const TextStyle(fontSize: 14),
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    ElevatedButton(
-                      onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => JobDetailScreen(job: widget.job),
-                          ),
-                        );
-                      },
-                      child: const Text('See Details'),
+                    Text(
+                      widget.job.title,
+                      style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                     ),
-                    ElevatedButton(
-                      onPressed: () {
-                        showDialog(
-                          context: context,
-                          builder: (context) => ApplicationForm(job: widget.job),
-                        );
-                      },
-                      child: const Text('Send Application'),
+                    Text(
+                      '${widget.job.restaurant} - ${widget.job.type} - ${widget.job.category.join(', ')}',
+                      style: const TextStyle(fontSize: 16, color: Colors.grey),
                     ),
                   ],
                 ),
-              ],
+              ),
+              IconButton(
+                icon: Icon(
+                  isSaved ? Icons.favorite : Icons.favorite_border,
+                  color: isSaved ? Colors.red : Colors.grey,
+                ),
+                onPressed: _toggleSaveJob,
+              ),
             ],
           ),
         ),
