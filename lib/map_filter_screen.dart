@@ -5,6 +5,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'dart:math';
 import 'dart:ui' as ui; // Import dart:ui for Path
+import 'job_detail_screen.dart'; // Import the JobDetailScreen widget
 
 class MapFilterScreen extends StatefulWidget {
   const MapFilterScreen({super.key});
@@ -212,28 +213,45 @@ class _MapFilterScreenState extends State<MapFilterScreen> {
                           // Display job details or navigate to a detailed view
                           showDialog(
                             context: context,
-                            builder: (context) => AlertDialog(
-                              title: Text(job.title),
-                              content: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Text('${job.restaurant}'),
-                                  Text('${job.description}'),
-                                  ElevatedButton(
-                                    onPressed: () {
-                                      Navigator.of(context).pop();
-                                      // Navigate to detailed view or other actions
-                                    },
-                                    child: Text('Details'),
+                            builder: (context) => GestureDetector(
+                              onTap: () => Navigator.of(context).pop(),
+                              child: Dialog(
+                                insetPadding: EdgeInsets.all(10),
+                                backgroundColor: Colors.transparent,
+                                child: GestureDetector(
+                                  onTap: () {},
+                                  child: Container(
+                                    padding: EdgeInsets.all(16),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white,
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    child: Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Text(
+                                          job.title,
+                                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                                        ),
+                                        Text('${job.restaurant}'),
+                                        Text('${job.description}'),
+                                        ElevatedButton(
+                                          onPressed: () {
+                                            Navigator.of(context).pop();
+                                            Navigator.push(
+                                              context,
+                                              MaterialPageRoute(
+                                                builder: (context) => JobDetailScreen(job: job),
+                                              ),
+                                            );
+                                          },
+                                          child: Text('Details'),
+                                        ),
+                                      ],
+                                    ),
                                   ),
-                                ],
-                              ),
-                              actions: [
-                                TextButton(
-                                  onPressed: () => Navigator.of(context).pop(),
-                                  child: Text('Close'),
                                 ),
-                              ],
+                              ),
                             ),
                           );
                         },

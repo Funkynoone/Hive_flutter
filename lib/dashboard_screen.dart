@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:hive_flutter/jobs_screen.dart';
 import 'package:hive_flutter/add_job_screen.dart';
+import 'package:badges/badges.dart' as Badges; // Import the Badges package
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -15,6 +16,7 @@ class DashboardScreen extends StatefulWidget {
 class _DashboardScreenState extends State<DashboardScreen> {
   int _selectedIndex = 0;
   bool isBusinessOwner = false; // This will be set based on the logged-in user's role
+  int _newApplicationsCount = 0; // Counter for new applications
 
   late final List<Widget> _screens;
 
@@ -22,37 +24,33 @@ class _DashboardScreenState extends State<DashboardScreen> {
   void initState() {
     super.initState();
     fetchUserRole(); // Function to determine if the user is a business owner
+    _fetchApplicationsCount(); // Fetch applications count
   }
 
   void fetchUserRole() async {
-    // Assuming you're storing the user's role in Firestore
     final user = FirebaseAuth.instance.currentUser;
     if (user != null) {
       final docSnapshot = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
       setState(() {
         isBusinessOwner = docSnapshot['isBusinessOwner'] ?? false;
-        // Initialize _screens here after fetching user role
         _initializeScreens();
       });
     }
   }
 
   void _initializeScreens() {
-    // Assume isBusinessOwner is already defined based on user role
     List<Widget> screens = [
       const Center(child: Text('Explore Screen')), // Placeholder for ExploreScreen
       const JobsScreen(),
       const Center(child: Text('Saved Screen')), // Placeholder for SavedScreen
       ProfileScreen(onLogout: () async {
         await FirebaseAuth.instance.signOut();
-        // Navigate to your login screen
         Navigator.pushReplacementNamed(context, '/login');
       }),
     ];
 
-    // Conditionally add the AddJobScreen
     if (isBusinessOwner) {
-      screens.insert(2, const AddJobScreen()); // Insert at desired position
+      screens.insert(2, const AddJobScreen());
     }
 
     setState(() {
@@ -60,10 +58,33 @@ class _DashboardScreenState extends State<DashboardScreen> {
     });
   }
 
+  void _fetchApplicationsCount() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      QuerySnapshot jobSnapshot = await FirebaseFirestore.instance
+          .collection('JobListings')
+          .where('ownerId', isEqualTo: user.uid)
+          .get();
+
+      int newApplicationsCount = 0;
+      for (var jobDoc in jobSnapshot.docs) {
+        QuerySnapshot applicationSnapshot = await FirebaseFirestore.instance
+            .collection('JobListings')
+            .doc(jobDoc.id)
+            .collection('Applications')
+            .where('status', isEqualTo: 'pending')
+            .get();
+        newApplicationsCount += applicationSnapshot.docs.length;
+      }
+
+      setState(() {
+        _newApplicationsCount = newApplicationsCount;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    // Define BottomNavigationBarItems based on the user's role
     List<BottomNavigationBarItem> navBarItems = [
       const BottomNavigationBarItem(icon: Icon(Icons.explore), label: 'Explore'),
       const BottomNavigationBarItem(icon: Icon(Icons.work), label: 'Jobs'),
@@ -74,7 +95,25 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('App'), // Adjust based on the selected screen if needed
+        title: const Text('App'),
+        actions: [
+          if (isBusinessOwner)
+            Badges.Badge(
+              badgeContent: Text(
+                '$_newApplicationsCount',
+                style: TextStyle(color: Colors.white),
+              ),
+              showBadge: _newApplicationsCount > 0,
+              position: Badges.BadgePosition.topEnd(top: 0, end: 3),
+              child: IconButton(
+                icon: Icon(Icons.notifications),
+                onPressed: () {
+                  // Navigate to notifications or refresh the count
+                  _fetchApplicationsCount(); // For example, refresh the count
+                },
+              ),
+            ),
+        ],
       ),
       body: IndexedStack(
         index: _selectedIndex,

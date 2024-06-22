@@ -2,8 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'dashboard_screen.dart'; // Your dashboard screen
-import 'login_screen.dart'; // Your login screen
+import 'auth_wrapper.dart'; // Import the AuthWrapper
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -23,13 +22,7 @@ class MyApp extends StatelessWidget {
       theme: ThemeData(
         primarySwatch: Colors.blue,
       ),
-      // Use named routes to manage navigation
-      initialRoute: FirebaseAuth.instance.currentUser == null ? '/login' : '/dashboard',
-      routes: {
-        '/dashboard': (context) => const DashboardScreen(),
-        '/login': (context) => const LoginScreen(), // Ensure you have a LoginScreen widget
-        // Define other routes as needed
-      },
+      home: AuthWrapper(), // Use AuthWrapper as the home
     );
   }
 }
