@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:hive_flutter/models/application.dart';
 import 'package:hive_flutter/models/job.dart';
 
@@ -15,7 +14,7 @@ class ApplicationManagerScreen extends StatefulWidget {
 
 class _ApplicationManagerScreenState extends State<ApplicationManagerScreen> {
   List<Job> _jobs = [];
-  Map<String, List<Application>> _applications = {};
+  final Map<String, List<Application>> _applications = {};
 
   @override
   void initState() {
@@ -81,13 +80,13 @@ class _ApplicationManagerScreenState extends State<ApplicationManagerScreen> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     IconButton(
-                      icon: Icon(Icons.check),
+                      icon: const Icon(Icons.check),
                       onPressed: () {
                         _markAsReviewed(application, job.id);
                       },
                     ),
                     IconButton(
-                      icon: Icon(Icons.close),
+                      icon: const Icon(Icons.close),
                       onPressed: () {
                         _rejectApplication(application, job.id);
                       },

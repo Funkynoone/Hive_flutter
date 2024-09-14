@@ -45,5 +45,11 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>io.flutter.embedded_views_preview</key>
+	<true/>
+	<key>GMSApiKey</key>
+	<string>YOUR_GOOGLE_MAPS_API_KEY</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>This app requires access to your location to show nearby restaurants and job opportunities.</string>
 </dict>
 </plist>

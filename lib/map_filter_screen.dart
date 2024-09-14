@@ -196,7 +196,7 @@ class _MapFilterScreenState extends State<MapFilterScreen> {
               children: [
                 TileLayer(
                   urlTemplate: "https://api.mapbox.com/styles/v1/{id}/tiles/{z}/{x}/{y}?access_token={accessToken}",
-                  additionalOptions: {
+                  additionalOptions: const {
                     'accessToken': 'pk.eyJ1IjoiYW5hbmlhczEzIiwiYSI6ImNseDliMjJvYTJoYWcyanF1ZHoybGViYzMifQ.nJ8im-LnmEld5GrEDBaeUQ', // Replace with your Mapbox access token
                     'id': 'mapbox/streets-v11',
                   },
@@ -217,21 +217,21 @@ class _MapFilterScreenState extends State<MapFilterScreen> {
                               content: Column(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  Text('${job.restaurant}'),
-                                  Text('${job.description}'),
+                                  Text(job.restaurant),
+                                  Text(job.description),
                                   ElevatedButton(
                                     onPressed: () {
                                       Navigator.of(context).pop();
                                       // Navigate to detailed view or other actions
                                     },
-                                    child: Text('Details'),
+                                    child: const Text('Details'),
                                   ),
                                 ],
                               ),
                               actions: [
                                 TextButton(
                                   onPressed: () => Navigator.of(context).pop(),
-                                  child: Text('Close'),
+                                  child: const Text('Close'),
                                 ),
                               ],
                             ),
@@ -244,11 +244,11 @@ class _MapFilterScreenState extends State<MapFilterScreen> {
                               child: CustomPaint(
                                 painter: BubblePainter(),
                                 child: Container(
-                                  padding: EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
+                                  padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
                                   decoration: BoxDecoration(
                                     color: Colors.white,
                                     borderRadius: BorderRadius.circular(15.0),
-                                    boxShadow: [
+                                    boxShadow: const [
                                       BoxShadow(
                                         color: Colors.black26,
                                         blurRadius: 3.0,
@@ -259,7 +259,7 @@ class _MapFilterScreenState extends State<MapFilterScreen> {
                                   ),
                                   child: Text(
                                     job.title,
-                                    style: TextStyle(
+                                    style: const TextStyle(
                                       color: Colors.black,
                                       fontWeight: FontWeight.bold,
                                     ),

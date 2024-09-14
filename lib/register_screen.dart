@@ -1,29 +1,44 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:flutter_google_places/flutter_google_places.dart';
-import 'package:google_maps_webservice/places.dart';
-import 'package:fluttertoast/fluttertoast.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:fluttertoast/fluttertoast.dart';
 
 class RegisterScreen extends StatefulWidget {
-  const RegisterScreen({super.key});
+  const RegisterScreen({Key? key}) : super(key: key);
 
   @override
   _RegisterScreenState createState() => _RegisterScreenState();
 }
 
 class _RegisterScreenState extends State<RegisterScreen> {
-  final _formKey = GlobalKey<FormState>();
-  final _usernameController = TextEditingController();
-  final _emailController = TextEditingController();
-  final _passwordController = TextEditingController();
-  final _confirmPasswordController = TextEditingController();
-  final _locationController = TextEditingController();
+  GoogleMapController? _mapController;
+  LatLng _selectedLocation = const LatLng(37.7749, -122.4194); // Default to San Francisco
+  late String _googleMapsApiKey;
 
-  bool isBusinessOwner = false;
-  LatLng? selectedPlaceLatLng;
-  final places = GoogleMapsPlaces(apiKey: "AIzaSyAL3YGfLOU2Ihv0i26NK41MQTFfUJ_l_TY"); // Ensure you replace YOUR_API_KEY with your actual Google Maps API key
+  @override
+  void initState() {
+    super.initState();
+    if (kIsWeb) {
+      _googleMapsApiKey = const String.fromEnvironment('GOOGLE_MAPS_API_KEY');
+    } else {
+      _googleMapsApiKey = dotenv.env['GOOGLE_MAPS_API_KEY'] ?? '';
+    }
+
+    if (_googleMapsApiKey.isEmpty) {
+      Fluttertoast.showToast(msg: "Google Maps API key is missing!");
+    }
+  }
+
+  void _onMapCreated(GoogleMapController controller) {
+    _mapController = controller;
+  }
+
+  void _onTap(LatLng position) {
+    setState(() {
+      _selectedLocation = position;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -31,133 +46,40 @@ class _RegisterScreenState extends State<RegisterScreen> {
       appBar: AppBar(
         title: const Text('Register'),
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: <Widget>[
-              SwitchListTile(
-                title: Text(isBusinessOwner ? 'Business Owner' : 'Job Seeker'),
-                value: isBusinessOwner,
-                onChanged: (bool value) {
-                  setState(() {
-                    isBusinessOwner = value;
-                    _locationController.clear();
-                    selectedPlaceLatLng = null;
-                  });
-                },
+      body: Column(
+        children: [
+          Expanded(
+            child: _googleMapsApiKey.isNotEmpty
+                ? GoogleMap(
+              onMapCreated: _onMapCreated,
+              initialCameraPosition: CameraPosition(
+                target: _selectedLocation,
+                zoom: 12,
               ),
-              if (isBusinessOwner)
-                TextFormField(
-                  controller: _locationController,
-                  decoration: const InputDecoration(
-                    labelText: 'Restaurant Location',
-                    suffixIcon: Icon(Icons.search),
-                  ),
-                  readOnly: true,
-                  onTap: () async {
-                    Prediction? p = await PlacesAutocomplete.show(
-                      context: context,
-                      apiKey: "YOUR_API_KEY",
-                      mode: Mode.overlay,
-                      types: [],
-                      strictbounds: false,
-                      components: [Component(Component.country, "us")],
-                    );
-
-                    if (p != null) {
-                      displayPrediction(p);
-                    }
-                  },
+              onTap: _onTap,
+              markers: {
+                Marker(
+                  markerId: const MarkerId('selected-location'),
+                  position: _selectedLocation,
                 ),
-              TextFormField(
-                controller: _usernameController,
-                decoration: const InputDecoration(labelText: 'Username'),
-              ),
-              TextFormField(
-                controller: _emailController,
-                decoration: const InputDecoration(labelText: 'Email'),
-                keyboardType: TextInputType.emailAddress,
-              ),
-              TextFormField(
-                controller: _passwordController,
-                decoration: const InputDecoration(labelText: 'Password'),
-                obscureText: true,
-              ),
-              TextFormField(
-                controller: _confirmPasswordController,
-                decoration: const InputDecoration(labelText: 'Confirm Password'),
-                obscureText: true,
-              ),
-              ElevatedButton(
-                child: const Text('Register'),
-                onPressed: () async {
-                  if (_formKey.currentState!.validate()) {
-                    // Registration logic
-                    try {
-                      UserCredential userCredential = await FirebaseAuth.instance.createUserWithEmailAndPassword(
-                        email: _emailController.text.trim(),
-                        password: _passwordController.text.trim(),
-                      );
-                      // On successful registration, save user data
-                      if (userCredential.user != null) {
-                        saveUserData(
-                          userCredential.user!.uid,
-                          _emailController.text.trim(),
-                          _usernameController.text.trim(),
-                          isBusinessOwner,
-                          selectedPlaceLatLng?.latitude,
-                          selectedPlaceLatLng?.longitude,
-                        );
-                      }
-                    } on FirebaseAuthException catch (e) {
-                      Fluttertoast.showToast(msg: "Failed to register: ${e.message}");
-                    }
-                  }
-                },
-              ),
-            ],
+              },
+            )
+                : const Center(child: Text("Google Maps API key is missing")),
           ),
-        ),
+          // Add other registration form fields here (e.g., TextFields for username, email, password)
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: ElevatedButton(
+              onPressed: () {
+                // Implement registration logic here
+                // You can use _selectedLocation as the owner's location
+                print("Selected Location: $_selectedLocation");
+              },
+              child: const Text('Register'),
+            ),
+          ),
+        ],
       ),
     );
-  }
-
-  Future<void> displayPrediction(Prediction p) async {
-    if (p.placeId == null) {
-      Fluttertoast.showToast(msg: "No place selected");
-      return;
-    }
-
-    GoogleMapsPlaces places = GoogleMapsPlaces(apiKey: "AIzaSyAL3YGfLOU2Ihv0i26NK41MQTFfUJ_l_TY"); // Use your actual API key
-    PlacesDetailsResponse detail = await places.getDetailsByPlaceId(p.placeId!);
-
-    if (detail.status == "OK") {
-      final lat = detail.result.geometry!.location.lat;
-      final lng = detail.result.geometry!.location.lng;
-
-      setState(() {
-        _locationController.text = detail.result.name;
-        selectedPlaceLatLng = LatLng(lat, lng);
-      });
-    } else {
-      Fluttertoast.showToast(msg: "Failed to fetch location details");
-    }
-  }
-
-
-  void saveUserData(String userId, String email, String username, bool isBusinessOwner, double? latitude, double? longitude) {
-    FirebaseFirestore.instance.collection('users').doc(userId).set({
-      'username': username,
-      'email': email,
-      'isBusinessOwner': isBusinessOwner,
-      'location': GeoPoint(latitude ?? 0, longitude ?? 0),
-    }).then((_) {
-      Fluttertoast.showToast(msg: "Registration successful");
-    }).catchError((error) {
-      Fluttertoast.showToast(msg: "Failed to save user data: $error");
-    });
   }
 }

@@ -9,7 +9,7 @@ import 'package:hive_flutter/models/job.dart'; // Adjust the path as needed
 class ApplicationForm extends StatefulWidget {
   final Job job;
 
-  ApplicationForm({required this.job});
+  const ApplicationForm({super.key, required this.job});
 
   @override
   _ApplicationFormState createState() => _ApplicationFormState();
@@ -53,7 +53,7 @@ class _ApplicationFormState extends State<ApplicationForm> {
       });
 
       Navigator.of(context).pop();
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Application submitted successfully')));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Application submitted successfully')));
     }
   }
 
@@ -68,34 +68,34 @@ class _ApplicationFormState extends State<ApplicationForm> {
             children: [
               TextFormField(
                 controller: _nameController,
-                decoration: InputDecoration(labelText: 'Name'),
+                decoration: const InputDecoration(labelText: 'Name'),
                 validator: (value) => value!.isEmpty ? 'Please enter your name' : null,
               ),
               TextFormField(
                 controller: _emailController,
-                decoration: InputDecoration(labelText: 'Email'),
+                decoration: const InputDecoration(labelText: 'Email'),
                 validator: (value) => value!.isEmpty ? 'Please enter your email' : null,
               ),
               TextFormField(
                 controller: _phoneController,
-                decoration: InputDecoration(labelText: 'Phone Number'),
+                decoration: const InputDecoration(labelText: 'Phone Number'),
                 validator: (value) => value!.isEmpty ? 'Please enter your phone number' : null,
               ),
               TextFormField(
                 controller: _messageController,
-                decoration: InputDecoration(labelText: 'Message'),
+                decoration: const InputDecoration(labelText: 'Message'),
                 maxLines: 3,
                 validator: (value) => value!.isEmpty ? 'Please enter a message' : null,
               ),
-              SizedBox(height: 10),
+              const SizedBox(height: 10),
               ElevatedButton(
                 onPressed: _pickFile,
                 child: Text(_cvFile == null ? 'Upload CV' : 'Change CV'),
               ),
-              SizedBox(height: 10),
+              const SizedBox(height: 10),
               ElevatedButton(
                 onPressed: _submitApplication,
-                child: Text('Submit Application'),
+                child: const Text('Submit Application'),
               ),
             ],
           ),
@@ -104,7 +104,7 @@ class _ApplicationFormState extends State<ApplicationForm> {
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
-          child: Text('Close'),
+          child: const Text('Close'),
         ),
       ],
     );

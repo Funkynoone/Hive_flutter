@@ -5,7 +5,7 @@ import 'package:hive_flutter/models/job.dart';
 import 'job_card.dart'; // Import the JobCard widget
 
 class SavedJobsScreen extends StatefulWidget {
-  const SavedJobsScreen({Key? key}) : super(key: key);
+  const SavedJobsScreen({super.key});
 
   @override
   _SavedJobsScreenState createState() => _SavedJobsScreenState();
