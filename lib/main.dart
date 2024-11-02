@@ -1,30 +1,19 @@
-
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
-import 'auth_wrapper.dart'; // Ensure this is correctly imported
+import 'auth_wrapper.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  if (!kIsWeb) {
-    await dotenv.load(fileName: ".env");
+  try {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+  } catch (e) {
+    print("Firebase initialization error: $e");
   }
-
-  await Firebase.initializeApp(
-    options: kIsWeb
-        ? const FirebaseOptions(
-      apiKey: "AIzaSyB6q0xYkFMXomhYwp5SI4iAZDRsLXVnTrE",
-      authDomain: "vesta-5e1d2.firebaseapp.com",
-      projectId: "vesta-5e1d2",
-      storageBucket: "vesta-5e1d2.appspot.com",
-      messagingSenderId: "260182988802",
-      appId: "1:260182988802:android:4612fd57e0ba30f0dcef1b",
-    )
-        : DefaultFirebaseOptions.currentPlatform,
-  );
 
   runApp(const MyApp());
 }
@@ -39,7 +28,7 @@ class MyApp extends StatelessWidget {
       theme: ThemeData(
         primarySwatch: Colors.blue,
       ),
-      home: const AuthWrapper(), // Ensure AuthWrapper is correctly implemented
+      home: const AuthWrapper(),
     );
   }
 }
