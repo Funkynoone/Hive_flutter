@@ -1,4 +1,5 @@
 
+
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/profile_screen.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -73,7 +74,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         title: const Text('App'),
         leading: isBusinessOwner
             ? IconButton(
-          icon: Icon(Icons.mail_outline),
+          icon: const Icon(Icons.mail_outline),
           onPressed: () {
             Navigator.push(
               context,

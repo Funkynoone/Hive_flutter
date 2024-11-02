@@ -1,3 +1,4 @@
+
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
@@ -14,7 +15,7 @@ Future<void> main() async {
 
   await Firebase.initializeApp(
     options: kIsWeb
-        ? FirebaseOptions(
+        ? const FirebaseOptions(
       apiKey: "AIzaSyB6q0xYkFMXomhYwp5SI4iAZDRsLXVnTrE",
       authDomain: "vesta-5e1d2.firebaseapp.com",
       projectId: "vesta-5e1d2",
@@ -29,7 +30,7 @@ Future<void> main() async {
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({Key? key}) : super(key: key);
+  const MyApp({super.key});
 
   @override
   Widget build(BuildContext context) {
