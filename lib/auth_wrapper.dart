@@ -9,83 +9,42 @@ class AuthWrapper extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(  // Add Scaffold here
-      body: Center(  // Center widget for better layout
-        child: StreamBuilder<User?>(
-          stream: FirebaseAuth.instance.authStateChanges(),
-          builder: (context, snapshot) {
-            // Handle authentication stream errors
-            if (snapshot.hasError) {
-              return Center(
-                child: Text(
-                  'Authentication Error: ${snapshot.error}',
-                  style: const TextStyle(color: Colors.red),
-                ),
-              );
-            }
+    return Scaffold(
+      body: StreamBuilder<User?>(
+        stream: FirebaseAuth.instance.authStateChanges(),
+        builder: (context, authSnapshot) {
+          if (authSnapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
 
-            // Show loading while checking auth state
-            if (snapshot.connectionState == ConnectionState.waiting) {
-              return const Center(
-                child: CircularProgressIndicator(),
-              );
-            }
+          // If not authenticated, show login screen
+          if (!authSnapshot.hasData) {
+            return const LoginScreen();
+          }
 
-            // Not authenticated
-            if (!snapshot.hasData) {
-              return const LoginScreen();
-            }
+          // User is authenticated, get Firestore data
+          return StreamBuilder<DocumentSnapshot>(
+            stream: FirebaseFirestore.instance
+                .collection('users')
+                .doc(authSnapshot.data!.uid)
+                .snapshots(),
+            builder: (context, userSnapshot) {
+              if (userSnapshot.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator());
+              }
 
-            // User is authenticated, get Firestore data
-            final user = snapshot.data!;
-            return FutureBuilder<DocumentSnapshot>(
-              future: FirebaseFirestore.instance.collection('users').doc(user.uid).get(),
-              builder: (context, userSnapshot) {
-                // Show loading while fetching user data
-                if (userSnapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(
-                    child: CircularProgressIndicator(),
-                  );
-                }
+              // Check if document exists and has data
+              if (!userSnapshot.hasData || !userSnapshot.data!.exists) {
+                // If no data, log out and return to login screen
+                FirebaseAuth.instance.signOut();
+                return const LoginScreen();
+              }
 
-                // Handle Firestore errors
-                if (userSnapshot.hasError) {
-                  return Center(
-                    child: Text(
-                      'Database Error: ${userSnapshot.error}',
-                      style: const TextStyle(color: Colors.red),
-                    ),
-                  );
-                }
-
-                // Handle missing user data
-                if (!userSnapshot.hasData || !userSnapshot.data!.exists) {
-                  return const Center(
-                    child: Text(
-                      'User data not found',
-                      style: TextStyle(color: Colors.red),
-                    ),
-                  );
-                }
-
-                // Successfully got user data
-                try {
-                  final userData = userSnapshot.data!.data() as Map<String, dynamic>;
-                  final isBusinessOwner = userData['isBusinessOwner'] as bool? ?? false;
-
-                  return const DashboardScreen();
-                } catch (e) {
-                  return Center(
-                    child: Text(
-                      'Data Error: $e',
-                      style: const TextStyle(color: Colors.red),
-                    ),
-                  );
-                }
-              },
-            );
-          },
-        ),
+              // Successfully got user data, show dashboard
+              return const DashboardScreen();
+            },
+          );
+        },
       ),
     );
   }
