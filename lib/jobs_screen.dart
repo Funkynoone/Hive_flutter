@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:hive_flutter/models/job.dart'; // Adjust the path as needed
-import 'job_card.dart'; // Import the JobCard widget
-import 'map_filter_screen.dart'; // Import the MapFilterScreen widget
+import 'package:hive_flutter/models/job.dart';
+import 'job_card.dart';
+import 'map_filter_screen.dart';
 
 class JobsScreen extends StatefulWidget {
   const JobsScreen({super.key});
@@ -23,10 +23,18 @@ class _JobsScreenState extends State<JobsScreen> {
   bool showCleaning = false;
   bool showCook = false;
   String? selectedRegion;
-  final List<String> regions = [
-    'Attica', 'Sterea Ellada', 'Peloponnisus', 'Epirus', 'Thessalia', 'Thraki', 'Ionian islands', 'Aegean islands', 'Creta'
-  ];
   List<Job> _jobs = [];
+
+  final List<String> regions = [
+    'Attica', 'Sterea Ellada', 'Peloponnisus', 'Epirus', 'Thessalia',
+    'Thraki', 'Ionian islands', 'Aegean islands', 'Creta'
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _searchJobs(); // Load jobs initially
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -36,16 +44,19 @@ class _JobsScreenState extends State<JobsScreen> {
         elevation: 0,
         centerTitle: true,
         title: TextButton(
-          onPressed: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => const MapFilterScreen(),
-              ),
-            );
+          onPressed: () async {
+            final jobs = await _fetchAllJobs(); // Fetch all jobs for map
+            if (mounted) {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => MapFilterScreen(initialJobs: jobs),
+                ),
+              );
+            }
           },
           style: TextButton.styleFrom(
-            backgroundColor: const Color(0xFFF4A261), // Sand yellow color
+            backgroundColor: const Color(0xFFF4A261),
             padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 24.0),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(18.0),
@@ -62,7 +73,9 @@ class _JobsScreenState extends State<JobsScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Job Specifications', style: TextStyle(fontSize: 18.0, fontWeight: FontWeight.bold)),
+            const Text('Job Specifications',
+                style: TextStyle(fontSize: 18.0, fontWeight: FontWeight.bold)
+            ),
             Wrap(
               spacing: 8.0,
               children: [
@@ -76,7 +89,9 @@ class _JobsScreenState extends State<JobsScreen> {
               ],
             ),
             const SizedBox(height: 20),
-            const Text('Contract Time', style: TextStyle(fontSize: 18.0, fontWeight: FontWeight.bold)),
+            const Text('Contract Time',
+                style: TextStyle(fontSize: 18.0, fontWeight: FontWeight.bold)
+            ),
             Wrap(
               spacing: 8.0,
               children: [
@@ -86,7 +101,9 @@ class _JobsScreenState extends State<JobsScreen> {
               ],
             ),
             const SizedBox(height: 20),
-            const Text('Region Filter', style: TextStyle(fontSize: 18.0, fontWeight: FontWeight.bold)),
+            const Text('Region Filter',
+                style: TextStyle(fontSize: 18.0, fontWeight: FontWeight.bold)
+            ),
             DropdownButton<String>(
               isExpanded: true,
               value: selectedRegion,
@@ -104,21 +121,30 @@ class _JobsScreenState extends State<JobsScreen> {
               }).toList(),
             ),
             const SizedBox(height: 20),
-            ElevatedButton(
-              onPressed: _searchJobs,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.purple,
-                minimumSize: const Size(double.infinity, 36),
-              ),
-              child: const Text('SEARCH'),
-            ),
-            ElevatedButton(
-              onPressed: _clearFilters,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.grey,
-                minimumSize: const Size(double.infinity, 36),
-              ),
-              child: const Text('CLEAR FILTERS'),
+            Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: _searchJobs,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.blueAccent,
+                      minimumSize: const Size(double.infinity, 36),
+                    ),
+                    child: const Text('SEARCH'),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: _clearFilters,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.white54,
+                      minimumSize: const Size(double.infinity, 36),
+                    ),
+                    child: const Text('CLEAR FILTERS'),
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 20),
             _jobs.isNotEmpty
@@ -138,6 +164,15 @@ class _JobsScreenState extends State<JobsScreen> {
     );
   }
 
+  Future<List<Job>> _fetchAllJobs() async {
+    final QuerySnapshot querySnapshot =
+    await FirebaseFirestore.instance.collection('JobListings').get();
+
+    return querySnapshot.docs
+        .map((doc) => Job.fromFirestore(doc.data() as Map<String, dynamic>, doc.id))
+        .toList();
+  }
+
   void _clearFilters() {
     setState(() {
       showFullTime = false;
@@ -151,8 +186,8 @@ class _JobsScreenState extends State<JobsScreen> {
       showCleaning = false;
       showCook = false;
       selectedRegion = null;
-      _jobs = [];
     });
+    _searchJobs(); // Refresh jobs after clearing filters
   }
 
   void _searchJobs() async {
@@ -161,7 +196,7 @@ class _JobsScreenState extends State<JobsScreen> {
     List<String> titleFilters = [];
     List<String> typeFilters = [];
 
-    // Adding title filters based on selected options
+    // Build filters
     if (showService) titleFilters.add('Service');
     if (showManager) titleFilters.add('Manager');
     if (showBar) titleFilters.add('Bar');
@@ -170,37 +205,40 @@ class _JobsScreenState extends State<JobsScreen> {
     if (showCleaning) titleFilters.add('Cleaning');
     if (showCook) titleFilters.add('Cook');
 
-    // Adding type filters based on selected options
     if (showFullTime) typeFilters.add('Full Time');
     if (showPartTime) typeFilters.add('Part Time');
     if (showSeason) typeFilters.add('Season');
 
-    // Apply region filter if a region is selected
+    // Apply filters
     if (selectedRegion != null) {
       query = query.where('region', isEqualTo: selectedRegion);
     }
 
-    // Apply title filters if any are active using 'category' field
     if (titleFilters.isNotEmpty) {
       query = query.where('category', arrayContainsAny: titleFilters);
     }
 
-    // Execute the query
+    // Execute query
     final QuerySnapshot querySnapshot = await query.get();
-    List<Job> jobs = querySnapshot.docs.map((doc) => Job.fromFirestore(doc.data() as Map<String, dynamic>, doc.id)).toList();
+    List<Job> jobs = querySnapshot.docs
+        .map((doc) => Job.fromFirestore(doc.data() as Map<String, dynamic>, doc.id))
+        .toList();
 
-    // Further filter by job types within Dart code if typeFilters are not empty
+    // Apply type filters in memory
     if (typeFilters.isNotEmpty) {
       jobs = jobs.where((job) => typeFilters.contains(job.type)).toList();
     }
 
-    setState(() {
-      _jobs = jobs;
-    });
+    // Debug logs
+    debugPrint('===== JOBS SEARCH RESULTS =====');
+    debugPrint('Total jobs found: ${jobs.length}');
+    for (var job in jobs) {
+      debugPrint('Job: ${job.restaurant} - ${job.title}');
+      debugPrint('Location: ${job.latitude}, ${job.longitude}');
+    }
+    debugPrint('=============================');
 
-    // Debugging output
-    print("Filters Applied: ${titleFilters.isNotEmpty || typeFilters.isNotEmpty || selectedRegion != null}");
-    print("Jobs Found: ${jobs.length}");
+    setState(() => _jobs = jobs);
   }
 
   Widget filterChip(String label, bool isSelected) {

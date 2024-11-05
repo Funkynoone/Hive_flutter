@@ -1,78 +1,73 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
-import 'package:hive_flutter/models/job.dart'; // Adjust the path as needed
-import 'dart:math';
-import 'dart:ui' as ui; // Import dart:ui for Path
+import 'package:hive_flutter/models/job.dart';
+import 'dart:ui' as ui;
 
 class MapScreen extends StatelessWidget {
   final List<Job> jobs;
 
   const MapScreen({super.key, required this.jobs});
 
-  // Function to generate random coordinates within Greece
-  LatLng getRandomCoordinates() {
-    final random = Random();
-    // Latitude and longitude ranges for Greece
-    double minLat = 34.802075;
-    double maxLat = 41.748833;
-    double minLng = 19.64761;
-    double maxLng = 29.62912;
-
-    double latitude = minLat + (maxLat - minLat) * random.nextDouble();
-    double longitude = minLng + (maxLng - minLng) * random.nextDouble();
-
-    return LatLng(latitude, longitude);
-  }
-
   @override
   Widget build(BuildContext context) {
+    // Center on Greece
+    final defaultCenter = LatLng(37.9838, 23.7275);
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Map'),
       ),
       body: FlutterMap(
         options: MapOptions(
-          center: LatLng(37.9838, 23.7275), // Centered on Greece
+          center: defaultCenter,
           zoom: 6.0,
         ),
         children: [
           TileLayer(
             urlTemplate: "https://api.mapbox.com/styles/v1/{id}/tiles/{z}/{x}/{y}?access_token={accessToken}",
             additionalOptions: const {
-              'accessToken': 'pk.eyJ1IjoiYW5hbmlhczEzIiwiYSI6ImNseDliMjJvYTJoYWcyanF1ZHoybGViYzMifQ.nJ8im-LnmEld5GrEDBaeUQ', // Replace with your Mapbox access token
+              'accessToken': 'pk.eyJ1IjoiYW5hbmlhczEzIiwiYSI6ImNseDliMjJvYTJoYWcyanF1ZHoybGViYzMifQ.nJ8im-LnmEld5GrEDBaeUQ',
               'id': 'mapbox/streets-v11',
             },
           ),
           MarkerLayer(
             markers: jobs.map((job) {
-              // Use random coordinates for each job
-              LatLng randomCoordinates = getRandomCoordinates();
-              print("Creating marker for job: ${job.title} at (${randomCoordinates.latitude}, ${randomCoordinates.longitude})");
+              debugPrint('===== JOB LOCATION DEBUG =====');
+              debugPrint('Restaurant: ${job.restaurant}');
+              debugPrint('Title: ${job.title}');
+              debugPrint('Latitude: ${job.latitude}');
+              debugPrint('Longitude: ${job.longitude}');
+              debugPrint('============================');
 
               return Marker(
-                width: 150.0,  // Adjusted width for the marker to fit text
-                height: 50.0,  // Adjusted height for the marker to fit text
-                point: randomCoordinates,
+                width: 150.0,
+                height: 50.0,
+                point: LatLng(job.latitude, job.longitude),
                 builder: (ctx) => GestureDetector(
                   onTap: () {
-                    // Display job details or navigate to a detailed view
                     showDialog(
                       context: context,
                       builder: (context) => AlertDialog(
-                        title: Text(job.title),
+                        title: Text(job.restaurant),
                         content: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Text(job.restaurant),
-                            Text(job.description),
-                            ElevatedButton(
-                              onPressed: () {
-                                Navigator.of(context).pop();
-                                // Navigate to detailed view or other actions
+                            Image.network(
+                              job.imageUrl,
+                              height: 100,
+                              width: 100,
+                              fit: BoxFit.cover,
+                              errorBuilder: (context, error, stackTrace) {
+                                return const Icon(Icons.error);
                               },
-                              child: const Text('Details'),
                             ),
+                            const SizedBox(height: 8),
+                            Text(job.title),
+                            Text('Type: ${job.type}'),
+                            Text('Category: ${job.category.join(", ")}'),
+                            const SizedBox(height: 8),
+                            Text(job.description),
                           ],
                         ),
                         actions: [
@@ -104,13 +99,25 @@ class MapScreen extends StatelessWidget {
                                 ),
                               ],
                             ),
-                            child: Text(
-                              job.title,
-                              style: const TextStyle(
-                                color: Colors.black,
-                                fontWeight: FontWeight.bold,
-                              ),
-                              textAlign: TextAlign.center,
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  job.restaurant,
+                                  style: const TextStyle(
+                                    color: Colors.black,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                                Text(
+                                  job.title,
+                                  style: const TextStyle(
+                                    color: Colors.grey,
+                                    fontSize: 10,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                         ),
