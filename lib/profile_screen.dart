@@ -90,9 +90,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 }),
               ),
               ElevatedButton(
-                onPressed: () {
-                  FirebaseAuth.instance.signOut();
-                  Navigator.pushReplacementNamed(context, '/login');
+                onPressed: () async {
+                  try {
+                    await FirebaseAuth.instance.signOut();
+                    if (mounted) {
+                      widget.onLogout(); // Call the callback
+                    }
+                  } catch (e) {
+                    print("Error during logout: $e");
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Error logging out: $e')),
+                      );
+                    }
+                  }
                 },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.red,

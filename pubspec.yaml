@@ -24,8 +24,8 @@ dependencies:
   shared_preferences: ^2.2.2
   image_picker: ^1.0.7
   badges: ^2.0.2
-  firebase_storage: ^11.0.6
-  file_picker: ^5.2.3
+  firebase_storage: ^11.2.6
+  file_picker: ^5.2.10
   flutter_map: ^4.0.0  # Downgrade to a version compatible with http ^0.13.1
   latlong2: ^0.8.1
   http: ^0.13.1

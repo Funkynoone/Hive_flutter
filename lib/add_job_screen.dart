@@ -241,6 +241,7 @@ class _AddJobScreenState extends State<AddJobScreen> {
 
         // Create the job listing
         await FirebaseFirestore.instance.collection('JobListings').add({
+          'ownerId': FirebaseAuth.instance.currentUser!.uid,
           'title': _selectedJobTitle,
           'type': _selectedJobType,
           'region': _selectedRegion ?? '',

@@ -1,13 +1,13 @@
-
-
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/profile_screen.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:hive_flutter/jobs_screen.dart';
 import 'package:hive_flutter/add_job_screen.dart';
-import 'package:hive_flutter/saved_jobs_screen.dart'; // Import the SavedJobsScreen
-import 'package:hive_flutter/application_manager_screen.dart'; // Import the ApplicationManagerScreen
+import 'package:hive_flutter/saved_jobs_screen.dart';
+import 'package:hive_flutter/application_manager_screen.dart';
+import 'package:hive_flutter/models/notification_model.dart';
+import 'package:hive_flutter/services/notification_service.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -43,11 +43,27 @@ class _DashboardScreenState extends State<DashboardScreen> {
     List<Widget> screens = [
       const Center(child: Text('Explore Screen')),
       const JobsScreen(),
-      const SavedJobsScreen(), // Add SavedJobsScreen
-      ProfileScreen(onLogout: () async {
-        await FirebaseAuth.instance.signOut();
-        Navigator.pushReplacementNamed(context, '/login');
-      }),
+      const SavedJobsScreen(),
+      ProfileScreen(
+        onLogout: () async {
+          try {
+            await FirebaseAuth.instance.signOut();
+            if (mounted) {
+              Navigator.pushNamedAndRemoveUntil(
+                context,
+                '/login',
+                    (route) => false,  // Remove all previous routes
+              );
+            }
+          } catch (e) {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Error logging out: $e')),
+              );
+            }
+          }
+        },
+      ),
     ];
 
     if (isBusinessOwner) {
@@ -73,14 +89,55 @@ class _DashboardScreenState extends State<DashboardScreen> {
       appBar: AppBar(
         title: const Text('App'),
         leading: isBusinessOwner
-            ? IconButton(
-          icon: const Icon(Icons.mail_outline),
-          onPressed: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => ApplicationManagerScreen(ownerId: FirebaseAuth.instance.currentUser!.uid),
-              ),
+            ? StreamBuilder<List<NotificationModel>>(
+          stream: NotificationService().getNotifications(
+            FirebaseAuth.instance.currentUser!.uid,
+          ),
+          builder: (context, snapshot) {
+            final unreadCount = snapshot.data
+                ?.where((notification) => !notification.read)
+                .length ?? 0;
+
+            return Stack(
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.mail_outline),
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => ApplicationManagerScreen(
+                          ownerId: FirebaseAuth.instance.currentUser!.uid,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+                if (unreadCount > 0)
+                  Positioned(
+                    right: 0,
+                    top: 0,
+                    child: Container(
+                      padding: const EdgeInsets.all(2),
+                      decoration: BoxDecoration(
+                        color: Colors.red,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      constraints: const BoxConstraints(
+                        minWidth: 20,
+                        minHeight: 20,
+                      ),
+                      child: Text(
+                        '$unreadCount',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  ),
+              ],
             );
           },
         )

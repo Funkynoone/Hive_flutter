@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:hive_flutter/models/application.dart';
-import 'package:hive_flutter/models/job.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'chat_screen.dart';
 
 class ApplicationManagerScreen extends StatefulWidget {
   final String ownerId;
@@ -13,111 +14,181 @@ class ApplicationManagerScreen extends StatefulWidget {
 }
 
 class _ApplicationManagerScreenState extends State<ApplicationManagerScreen> {
-  List<Job> _jobs = [];
-  final Map<String, List<Application>> _applications = {};
-
-  @override
-  void initState() {
-    super.initState();
-    _fetchJobs();
-  }
-
-  void _fetchJobs() async {
-    QuerySnapshot jobSnapshot = await FirebaseFirestore.instance
-        .collection('JobListings')
-        .where('ownerId', isEqualTo: widget.ownerId)
-        .get();
-
-    List<Job> jobs = jobSnapshot.docs.map((doc) {
-      return Job.fromFirestore(doc.data() as Map<String, dynamic>, doc.id);
-    }).toList();
-
-    setState(() {
-      _jobs = jobs;
-    });
-
-    _fetchApplications();
-  }
-
-  void _fetchApplications() async {
-    for (var job in _jobs) {
-      QuerySnapshot applicationSnapshot = await FirebaseFirestore.instance
-          .collection('JobListings')
-          .doc(job.id)
-          .collection('Applications')
-          .get();
-
-      List<Application> applications = applicationSnapshot.docs.map((doc) {
-        return Application.fromFirestore(doc.data() as Map<String, dynamic>, doc.id);
-      }).toList();
-
-      setState(() {
-        _applications[job.id] = applications;
-      });
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Application Manager'),
+        title: const Text('Applications'),
       ),
-      body: ListView.builder(
-        itemCount: _jobs.length,
-        itemBuilder: (context, index) {
-          final job = _jobs[index];
-          final jobApplications = _applications[job.id] ?? [];
+      body: StreamBuilder<QuerySnapshot>(
+        stream: FirebaseFirestore.instance
+            .collection('notifications')
+            .where('userId', isEqualTo: widget.ownerId)
+            .orderBy('timestamp', descending: true)
+            .snapshots(),
+        builder: (context, snapshot) {
+          if (snapshot.hasError) {
+            return Center(child: Text('Error: ${snapshot.error}'));
+          }
 
-          return ExpansionTile(
-            title: Text(job.title),
-            subtitle: Text(job.restaurant),
-            children: jobApplications.map((application) {
-              return ListTile(
-                title: Text(application.name),
-                subtitle: Text(application.message),
-                trailing: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.check),
-                      onPressed: () {
-                        _markAsReviewed(application, job.id);
-                      },
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.close),
-                      onPressed: () {
-                        _rejectApplication(application, job.id);
-                      },
-                    ),
-                  ],
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+            return const Center(child: Text('No applications yet'));
+          }
+
+          return ListView.builder(
+            itemCount: snapshot.data!.docs.length,
+            itemBuilder: (context, index) {
+              final notification = snapshot.data!.docs[index];
+              final data = notification.data() as Map<String, dynamic>;
+              final type = data['type'] as String;
+              final isRead = data['read'] as bool;
+              final status = data['status'] as String? ?? 'pending';
+
+              return Card(
+                color: isRead ? null : Colors.blue.shade50,
+                child: ListTile(
+                  title: Text(data['title']),
+                  subtitle: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(data['message']),
+                      Text(
+                        'From: ${data['data']['applicantName']}',
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      if (status != 'pending')
+                        Text(
+                          'Status: ${status.toUpperCase()}',
+                          style: TextStyle(
+                            color: status == 'accepted' ? Colors.green : Colors.red,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                    ],
+                  ),
+                  trailing: status == 'pending'
+                      ? Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (type == 'cv')
+                        IconButton(
+                          icon: const Icon(Icons.description),
+                          onPressed: () async {
+                            final cvUrl = data['data']['cvUrl'];
+                            if (cvUrl != null) {
+                              await launchUrl(Uri.parse(cvUrl));
+                            }
+                          },
+                          tooltip: 'View CV',
+                        ),
+                      IconButton(
+                        icon: const Icon(Icons.check_circle_outline),
+                        color: Colors.green,
+                        onPressed: () async {
+                          try {
+                            // Create chat room
+                            final chatRoomId = '${widget.ownerId}_${data['senderId']}_${data['data']['jobId']}';
+                            await FirebaseFirestore.instance
+                                .collection('chats')
+                                .doc(chatRoomId)
+                                .set({
+                              'participants': [widget.ownerId, data['senderId']],
+                              'jobId': data['data']['jobId'],
+                              'jobTitle': data['data']['jobTitle'],
+                              'lastMessage': 'Chat started',
+                              'lastMessageTime': FieldValue.serverTimestamp(),
+                            });
+
+                            // Update notification status
+                            await FirebaseFirestore.instance
+                                .collection('notifications')
+                                .doc(notification.id)
+                                .update({
+                              'status': 'accepted',
+                              'read': true,
+                            });
+
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('Application accepted')),
+                              );
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => ChatScreen(
+                                    chatRoomId: chatRoomId,
+                                    jobTitle: data['data']['jobTitle'],
+                                  ),
+                                ),
+                              );
+                            }
+                          } catch (e) {
+                            print("Error accepting application: $e");
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text('Error accepting application: $e')),
+                              );
+                            }
+                          }
+                        },
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.cancel_outlined),
+                        color: Colors.red,
+                        onPressed: () async {
+                          try {
+                            await FirebaseFirestore.instance
+                                .collection('notifications')
+                                .doc(notification.id)
+                                .update({
+                              'status': 'rejected',
+                              'read': true,
+                            });
+
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('Application rejected')),
+                              );
+                            }
+                          } catch (e) {
+                            print("Error rejecting application: $e");
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text('Error rejecting application: $e')),
+                              );
+                            }
+                          }
+                        },
+                      ),
+                    ],
+                  )
+                      : status == 'accepted'
+                      ? IconButton(
+                    icon: const Icon(Icons.chat),
+                    onPressed: () {
+                      final chatRoomId = '${widget.ownerId}_${data['senderId']}_${data['data']['jobId']}';
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => ChatScreen(
+                            chatRoomId: chatRoomId,
+                            jobTitle: data['data']['jobTitle'],
+                          ),
+                        ),
+                      );
+                    },
+                  )
+                      : null,
                 ),
               );
-            }).toList(),
+            },
           );
         },
       ),
     );
-  }
-
-  void _markAsReviewed(Application application, String jobId) {
-    // Update application status in Firestore
-    FirebaseFirestore.instance
-        .collection('JobListings')
-        .doc(jobId)
-        .collection('Applications')
-        .doc(application.id)
-        .update({'status': 'reviewed'});
-  }
-
-  void _rejectApplication(Application application, String jobId) {
-    // Update application status in Firestore
-    FirebaseFirestore.instance
-        .collection('JobListings')
-        .doc(jobId)
-        .collection('Applications')
-        .doc(application.id)
-        .update({'status': 'rejected'});
   }
 }

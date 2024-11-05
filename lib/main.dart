@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
 import 'auth_wrapper.dart';
+import 'login_screen.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -27,8 +29,36 @@ class MyApp extends StatelessWidget {
       title: 'Hive Flutter',
       theme: ThemeData(
         primarySwatch: Colors.blue,
+        // Add any other theme configurations here
       ),
-      home: const AuthWrapper(),
+      initialRoute: '/',
+      routes: {
+        '/': (context) => const AuthWrapper(),
+        '/login': (context) => const LoginScreen(),
+      },
+      // Handle unknown routes
+      onUnknownRoute: (settings) {
+        return MaterialPageRoute(
+          builder: (context) => const AuthWrapper(),
+        );
+      },
+      // Handle generation of routes
+      onGenerateRoute: (settings) {
+        switch (settings.name) {
+          case '/':
+            return MaterialPageRoute(
+              builder: (context) => const AuthWrapper(),
+            );
+          case '/login':
+            return MaterialPageRoute(
+              builder: (context) => const LoginScreen(),
+            );
+          default:
+            return MaterialPageRoute(
+              builder: (context) => const AuthWrapper(),
+            );
+        }
+      },
     );
   }
 }

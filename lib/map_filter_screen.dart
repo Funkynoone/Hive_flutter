@@ -4,6 +4,7 @@ import 'package:hive_flutter/models/job.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'dart:ui' as ui;
+import 'package:hive_flutter/job_detail_screen.dart'; // Adjust import path as needed
 
 class MapFilterScreen extends StatefulWidget {
   final List<Job>? initialJobs;
@@ -70,14 +71,6 @@ class _MapFilterScreenState extends State<MapFilterScreen> {
         jobs = jobs.where((job) => typeFilters.contains(job.type)).toList();
       }
 
-      debugPrint('===== MAP JOBS =====');
-      debugPrint('Total jobs found: ${jobs.length}');
-      for (var job in jobs) {
-        debugPrint('Job: ${job.restaurant} - ${job.title}');
-        debugPrint('Location: ${job.latitude}, ${job.longitude}');
-      }
-      debugPrint('===================');
-
       setState(() => _jobs = jobs);
     } catch (e) {
       debugPrint('Error fetching jobs: $e');
@@ -142,7 +135,7 @@ class _MapFilterScreenState extends State<MapFilterScreen> {
               children: [
                 FlutterMap(
                   options: MapOptions(
-                    center: LatLng(37.9838, 23.7275), // Center on Greece
+                    center: LatLng(37.9838, 23.7275),
                     zoom: 6.0,
                     minZoom: 5.0,
                     maxZoom: 18.0,
@@ -158,49 +151,57 @@ class _MapFilterScreenState extends State<MapFilterScreen> {
                     ),
                     MarkerLayer(
                       markers: _jobs.map((job) {
-                        debugPrint('Creating marker for ${job.restaurant} at (${job.latitude}, ${job.longitude})');
-
                         return Marker(
                           width: 150.0,
                           height: 50.0,
                           point: LatLng(job.latitude, job.longitude),
                           rotate: true,
-                          anchorPos: AnchorPos.align(AnchorAlign.top),
                           builder: (ctx) => GestureDetector(
                             onTap: () {
                               showDialog(
                                 context: context,
-                                builder: (context) => AlertDialog(
-                                  title: Text(job.restaurant),
-                                  content: SingleChildScrollView(
+                                barrierDismissible: true,
+                                builder: (context) => Dialog(
+                                  child: Container(
+                                    padding: const EdgeInsets.all(16),
                                     child: Column(
                                       mainAxisSize: MainAxisSize.min,
-                                      crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
-                                        Image.network(
-                                          job.imageUrl,
-                                          height: 100,
-                                          width: double.infinity,
-                                          fit: BoxFit.cover,
-                                          errorBuilder: (context, error, stackTrace) =>
-                                          const Icon(Icons.error),
+                                        Text(
+                                          job.title,
+                                          style: const TextStyle(
+                                            fontSize: 18,
+                                            fontWeight: FontWeight.bold,
+                                          ),
                                         ),
                                         const SizedBox(height: 8),
-                                        Text('Position: ${job.title}',
-                                            style: const TextStyle(fontWeight: FontWeight.bold)),
-                                        Text('Type: ${job.type}'),
-                                        Text('Category: ${job.category.join(", ")}'),
-                                        const SizedBox(height: 8),
-                                        Text(job.description),
+                                        Text(job.restaurant),
+                                        Text(job.type),
+                                        const SizedBox(height: 16),
+                                        Row(
+                                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                                          children: [
+                                            TextButton(
+                                              onPressed: () => Navigator.pop(context),
+                                              child: const Text('Close'),
+                                            ),
+                                            ElevatedButton(
+                                              onPressed: () {
+                                                Navigator.pop(context); // Close dialog
+                                                Navigator.push(
+                                                  context,
+                                                  MaterialPageRoute(
+                                                    builder: (context) => JobDetailScreen(job: job),
+                                                  ),
+                                                );
+                                              },
+                                              child: const Text('View Details'),
+                                            ),
+                                          ],
+                                        ),
                                       ],
                                     ),
                                   ),
-                                  actions: [
-                                    TextButton(
-                                      onPressed: () => Navigator.of(context).pop(),
-                                      child: const Text('Close'),
-                                    ),
-                                  ],
                                 ),
                               );
                             },
