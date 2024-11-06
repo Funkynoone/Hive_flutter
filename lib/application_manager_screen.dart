@@ -92,6 +92,8 @@ class _ApplicationManagerScreenState extends State<ApplicationManagerScreen> {
                           try {
                             // Create chat room
                             final chatRoomId = '${widget.ownerId}_${data['senderId']}_${data['data']['jobId']}';
+
+                            // Create chat and add initial message
                             await FirebaseFirestore.instance
                                 .collection('chats')
                                 .doc(chatRoomId)
@@ -99,8 +101,19 @@ class _ApplicationManagerScreenState extends State<ApplicationManagerScreen> {
                               'participants': [widget.ownerId, data['senderId']],
                               'jobId': data['data']['jobId'],
                               'jobTitle': data['data']['jobTitle'],
-                              'lastMessage': 'Chat started',
+                              'lastMessage': data['message'], // Use the application message
                               'lastMessageTime': FieldValue.serverTimestamp(),
+                            });
+
+                            // Add the initial message to messages collection
+                            await FirebaseFirestore.instance
+                                .collection('chats')
+                                .doc(chatRoomId)
+                                .collection('messages')
+                                .add({
+                              'text': data['message'],
+                              'senderId': data['senderId'],
+                              'timestamp': FieldValue.serverTimestamp(),
                             });
 
                             // Update notification status
@@ -110,6 +123,24 @@ class _ApplicationManagerScreenState extends State<ApplicationManagerScreen> {
                                 .update({
                               'status': 'accepted',
                               'read': true,
+                            });
+
+                            // Create notification for the applicant
+                            await FirebaseFirestore.instance
+                                .collection('notifications')
+                                .add({
+                              'title': 'Application Accepted',
+                              'message': 'Your application for ${data['data']['jobTitle']} has been accepted',
+                              'userId': data['senderId'],
+                              'senderId': widget.ownerId,
+                              'type': 'application_response',
+                              'status': 'accepted',
+                              'read': false,
+                              'timestamp': FieldValue.serverTimestamp(),
+                              'data': {
+                                'jobId': data['data']['jobId'],
+                                'jobTitle': data['data']['jobTitle'],
+                              }
                             });
 
                             if (mounted) {
@@ -147,6 +178,24 @@ class _ApplicationManagerScreenState extends State<ApplicationManagerScreen> {
                                 .update({
                               'status': 'rejected',
                               'read': true,
+                            });
+
+                            // Create notification for the applicant
+                            await FirebaseFirestore.instance
+                                .collection('notifications')
+                                .add({
+                              'title': 'Application Rejected',
+                              'message': 'Your application for ${data['data']['jobTitle']} has been rejected',
+                              'userId': data['senderId'],
+                              'senderId': widget.ownerId,
+                              'type': 'application_response',
+                              'status': 'rejected',
+                              'read': false,
+                              'timestamp': FieldValue.serverTimestamp(),
+                              'data': {
+                                'jobId': data['data']['jobId'],
+                                'jobTitle': data['data']['jobTitle'],
+                              }
                             });
 
                             if (mounted) {

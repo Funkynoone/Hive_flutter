@@ -6,6 +6,7 @@ import 'package:hive_flutter/jobs_screen.dart';
 import 'package:hive_flutter/add_job_screen.dart';
 import 'package:hive_flutter/saved_jobs_screen.dart';
 import 'package:hive_flutter/application_manager_screen.dart';
+import 'package:hive_flutter/user_applications_screen.dart'; // Add this import
 import 'package:hive_flutter/models/notification_model.dart';
 import 'package:hive_flutter/services/notification_service.dart';
 
@@ -52,7 +53,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               Navigator.pushNamedAndRemoveUntil(
                 context,
                 '/login',
-                    (route) => false,  // Remove all previous routes
+                    (route) => false,
               );
             }
           } catch (e) {
@@ -75,6 +76,63 @@ class _DashboardScreenState extends State<DashboardScreen> {
     });
   }
 
+  Widget _buildApplicationButton() {
+    return StreamBuilder<List<NotificationModel>>(
+      stream: NotificationService().getNotifications(
+        FirebaseAuth.instance.currentUser!.uid,
+      ),
+      builder: (context, snapshot) {
+        final unreadCount = snapshot.data
+            ?.where((notification) => !notification.read)
+            .length ?? 0;
+
+        return Stack(
+          children: [
+            IconButton(
+              icon: const Icon(Icons.mail_outline),
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => isBusinessOwner
+                        ? ApplicationManagerScreen(
+                      ownerId: FirebaseAuth.instance.currentUser!.uid,
+                    )
+                        : const UserApplicationsScreen(),
+                  ),
+                );
+              },
+            ),
+            if (unreadCount > 0)
+              Positioned(
+                right: 0,
+                top: 0,
+                child: Container(
+                  padding: const EdgeInsets.all(2),
+                  decoration: BoxDecoration(
+                    color: Colors.red,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  constraints: const BoxConstraints(
+                    minWidth: 20,
+                    minHeight: 20,
+                  ),
+                  child: Text(
+                    '$unreadCount',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 12,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     List<BottomNavigationBarItem> navBarItems = [
@@ -88,60 +146,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('App'),
-        leading: isBusinessOwner
-            ? StreamBuilder<List<NotificationModel>>(
-          stream: NotificationService().getNotifications(
-            FirebaseAuth.instance.currentUser!.uid,
-          ),
-          builder: (context, snapshot) {
-            final unreadCount = snapshot.data
-                ?.where((notification) => !notification.read)
-                .length ?? 0;
-
-            return Stack(
-              children: [
-                IconButton(
-                  icon: const Icon(Icons.mail_outline),
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => ApplicationManagerScreen(
-                          ownerId: FirebaseAuth.instance.currentUser!.uid,
-                        ),
-                      ),
-                    );
-                  },
-                ),
-                if (unreadCount > 0)
-                  Positioned(
-                    right: 0,
-                    top: 0,
-                    child: Container(
-                      padding: const EdgeInsets.all(2),
-                      decoration: BoxDecoration(
-                        color: Colors.red,
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      constraints: const BoxConstraints(
-                        minWidth: 20,
-                        minHeight: 20,
-                      ),
-                      child: Text(
-                        '$unreadCount',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 12,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                    ),
-                  ),
-              ],
-            );
-          },
-        )
-            : null,
+        leading: _buildApplicationButton(), // Show for both users and owners
       ),
       body: IndexedStack(
         index: _selectedIndex,

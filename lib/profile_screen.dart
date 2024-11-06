@@ -4,7 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 import 'editpersonalinfo_screen.dart';
-
+import 'package:hive_flutter/components/delete_account.dart'; // Add this import (adjust path as needed)
 
 class ProfileScreen extends StatefulWidget {
   final VoidCallback onLogout;
@@ -21,7 +21,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   late String _userName;
   late String _userEmail;
   late String _userPhone;
-  ImageProvider? _profileImage = const AssetImage('assets/profileimage.png'); // Update to use your asset
+  ImageProvider? _profileImage = const AssetImage('assets/profileimage.png');
 
   @override
   void initState() {
@@ -48,7 +48,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
       setState(() {
         _profileImage = FileImage(File(pickedFile.path));
       });
-      // Here, upload the selected image to Firebase Storage and update the user profile accordingly
     }
   }
 
@@ -59,42 +58,77 @@ class _ProfileScreenState extends State<ProfileScreen> {
         title: const Text('Profile'),
       ),
       body: SingleChildScrollView(
-        child: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
+              const SizedBox(height: 20),
               CircleAvatar(
                 radius: 50,
                 backgroundImage: _profileImage,
               ),
+              const SizedBox(height: 10),
               ElevatedButton(
                 onPressed: _changeProfilePicture,
                 child: const Text('Change Picture'),
               ),
-              Text(_userName),
-              Text(_userEmail),
-              Text(_userPhone),
+              const SizedBox(height: 20),
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Column(
+                    children: [
+                      Text(
+                        _userName,
+                        style: Theme.of(context).textTheme.titleLarge,
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        _userEmail,
+                        style: Theme.of(context).textTheme.bodyLarge,
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        _userPhone,
+                        style: Theme.of(context).textTheme.bodyLarge,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
               ElevatedButton(
                 onPressed: () {
-                  // Navigate to Edit Personal Info Screen
                   Navigator.push(
                     context,
                     MaterialPageRoute(builder: (context) => const EditPersonalInfoScreen()),
                   );
                 },
+                style: ElevatedButton.styleFrom(
+                  minimumSize: const Size.fromHeight(50),
+                ),
                 child: const Text('Edit Personal Info'),
               ),
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: List.generate(5, (index) {
-                  return const Icon(Icons.star, color: Colors.amber);
-                }),
+              const SizedBox(height: 20),
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: List.generate(5, (index) {
+                      return const Icon(Icons.star, color: Colors.amber);
+                    }),
+                  ),
+                ),
               ),
+              const SizedBox(height: 20),
               ElevatedButton(
                 onPressed: () async {
                   try {
                     await FirebaseAuth.instance.signOut();
                     if (mounted) {
-                      widget.onLogout(); // Call the callback
+                      widget.onLogout();
                     }
                   } catch (e) {
                     print("Error during logout: $e");
@@ -106,10 +140,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   }
                 },
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.red,
+                  backgroundColor: Colors.orange,
+                  minimumSize: const Size.fromHeight(50),
                 ),
                 child: const Text('Log Out'),
               ),
+              const SizedBox(height: 20),
+              const DeleteAccountButton(), // Add the DeleteAccountButton here
+              const SizedBox(height: 20),
             ],
           ),
         ),
