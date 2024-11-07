@@ -51,7 +51,7 @@ class _ApplicationManagerScreenState extends State<ApplicationManagerScreen> {
               return Card(
                 color: isRead ? null : Colors.blue.shade50,
                 child: ListTile(
-                  title: Text(data['title']),
+                  title: Text(data['data']['jobTitle'] ?? 'Job Application'),
                   subtitle: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -90,10 +90,9 @@ class _ApplicationManagerScreenState extends State<ApplicationManagerScreen> {
                         color: Colors.green,
                         onPressed: () async {
                           try {
-                            // Create chat room
                             final chatRoomId = '${widget.ownerId}_${data['senderId']}_${data['data']['jobId']}';
 
-                            // Create chat and add initial message
+                            // Create chat room
                             await FirebaseFirestore.instance
                                 .collection('chats')
                                 .doc(chatRoomId)
@@ -101,11 +100,13 @@ class _ApplicationManagerScreenState extends State<ApplicationManagerScreen> {
                               'participants': [widget.ownerId, data['senderId']],
                               'jobId': data['data']['jobId'],
                               'jobTitle': data['data']['jobTitle'],
-                              'lastMessage': data['message'], // Use the application message
+                              'lastMessage': data['message'],
                               'lastMessageTime': FieldValue.serverTimestamp(),
+                              'lastSenderId': data['senderId'],
+                              'unreadCount': 0
                             });
 
-                            // Add the initial message to messages collection
+                            // Add the original message
                             await FirebaseFirestore.instance
                                 .collection('chats')
                                 .doc(chatRoomId)
@@ -114,6 +115,8 @@ class _ApplicationManagerScreenState extends State<ApplicationManagerScreen> {
                               'text': data['message'],
                               'senderId': data['senderId'],
                               'timestamp': FieldValue.serverTimestamp(),
+                              'isRead': false,
+                              'senderName': data['data']['applicantName']
                             });
 
                             // Update notification status
@@ -123,24 +126,6 @@ class _ApplicationManagerScreenState extends State<ApplicationManagerScreen> {
                                 .update({
                               'status': 'accepted',
                               'read': true,
-                            });
-
-                            // Create notification for the applicant
-                            await FirebaseFirestore.instance
-                                .collection('notifications')
-                                .add({
-                              'title': 'Application Accepted',
-                              'message': 'Your application for ${data['data']['jobTitle']} has been accepted',
-                              'userId': data['senderId'],
-                              'senderId': widget.ownerId,
-                              'type': 'application_response',
-                              'status': 'accepted',
-                              'read': false,
-                              'timestamp': FieldValue.serverTimestamp(),
-                              'data': {
-                                'jobId': data['data']['jobId'],
-                                'jobTitle': data['data']['jobTitle'],
-                              }
                             });
 
                             if (mounted) {
@@ -172,30 +157,13 @@ class _ApplicationManagerScreenState extends State<ApplicationManagerScreen> {
                         color: Colors.red,
                         onPressed: () async {
                           try {
+                            // Just update status to rejected
                             await FirebaseFirestore.instance
                                 .collection('notifications')
                                 .doc(notification.id)
                                 .update({
                               'status': 'rejected',
                               'read': true,
-                            });
-
-                            // Create notification for the applicant
-                            await FirebaseFirestore.instance
-                                .collection('notifications')
-                                .add({
-                              'title': 'Application Rejected',
-                              'message': 'Your application for ${data['data']['jobTitle']} has been rejected',
-                              'userId': data['senderId'],
-                              'senderId': widget.ownerId,
-                              'type': 'application_response',
-                              'status': 'rejected',
-                              'read': false,
-                              'timestamp': FieldValue.serverTimestamp(),
-                              'data': {
-                                'jobId': data['data']['jobId'],
-                                'jobTitle': data['data']['jobTitle'],
-                              }
                             });
 
                             if (mounted) {

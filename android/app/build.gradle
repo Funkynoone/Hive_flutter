@@ -55,8 +55,8 @@ android {
         applicationId "com.example.hive_flutter"
         minSdkVersion flutter.minSdkVersion
         targetSdkVersion flutter.targetSdkVersion
-        versionCode flutterVersionCode.toInteger()
-        versionName flutterVersionName
+        versionCode 1
+        versionName "1.0"
 
         // Add Maps API key configuration
         buildConfigField "String", "MAPS_API_KEY", "\"${mapsApiKey}\""

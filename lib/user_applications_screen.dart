@@ -17,7 +17,7 @@ class UserApplicationsScreen extends StatelessWidget {
       body: StreamBuilder<QuerySnapshot>(
         stream: FirebaseFirestore.instance
             .collection('notifications')
-            .where('userId', isEqualTo: currentUser?.uid)
+            .where('senderId', isEqualTo: currentUser?.uid)
             .orderBy('timestamp', descending: true)
             .snapshots(),
         builder: (context, snapshot) {
@@ -42,11 +42,11 @@ class UserApplicationsScreen extends StatelessWidget {
 
               return Card(
                 child: ListTile(
-                  title: Text(data['title'] ?? 'Job Application'),
+                  title: Text(data['data']['jobTitle'] ?? 'Job Application'),
                   subtitle: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(data['message'] ?? ''),
+                      Text(data['message']), // This should show the actual message
                       const SizedBox(height: 4),
                       Text(
                         'Status: ${status.toUpperCase()}',
@@ -65,9 +65,8 @@ class UserApplicationsScreen extends StatelessWidget {
                       ? IconButton(
                     icon: const Icon(Icons.chat),
                     onPressed: () {
-                      // Make sure this matches exactly how it's created in ApplicationManagerScreen
                       final chatRoomId = '${data['userId']}_${currentUser?.uid}_${data['data']['jobId']}';
-                      print('Opening chat with ID: $chatRoomId'); // Debug print
+                      print('Opening chat with ID: $chatRoomId');
                       Navigator.push(
                         context,
                         MaterialPageRoute(
