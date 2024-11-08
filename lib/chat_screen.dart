@@ -87,7 +87,7 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white, // Fix red background
+      backgroundColor: Colors.grey[100], // Fix red background
       appBar: AppBar(
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,

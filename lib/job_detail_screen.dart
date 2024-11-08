@@ -82,10 +82,21 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
         allowedExtensions: ['pdf', 'doc', 'docx'],
       );
 
-      if (result == null) return;
+      if (result == null) {
+        setState(() => _isUploading = false);
+        return;
+      }
 
       final user = FirebaseAuth.instance.currentUser;
-      if (user == null) return;
+      if (user == null) {
+        setState(() => _isUploading = false);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Please login to apply')),
+          );
+        }
+        return;
+      }
 
       // Get user data
       final userData = await FirebaseFirestore.instance
@@ -120,12 +131,30 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
         'type': 'cv',
       });
 
+      // Create notification for the owner
+      await NotificationService().createNotification(
+        userId: widget.job.ownerId,
+        senderId: user.uid,
+        title: 'New CV Application',
+        message: '${userData['username'] ?? 'Anonymous'} submitted a CV application',
+        type: 'cv',
+        data: {
+          'jobId': widget.job.id,
+          'jobTitle': widget.job.title,
+          'businessName': widget.job.restaurant,
+          'applicantName': userData['username'] ?? 'Anonymous',
+          'cvUrl': downloadUrl,
+          'timestamp': FieldValue.serverTimestamp(),
+        },
+      );
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('CV uploaded successfully!')),
         );
       }
     } catch (e) {
+      print('Error uploading CV: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error uploading CV: $e')),
@@ -169,17 +198,19 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
         'type': 'message',
       });
 
-      // Create notification for the owner
+      // Create notification for the owner with the actual message
       await NotificationService().createNotification(
-        userId: widget.job.ownerId,  // Make sure Job model includes ownerId
+        userId: widget.job.ownerId,
         senderId: user.uid,
         title: 'New Message',
-        message: '${userData['username']} sent a message about ${widget.job.title}',
+        message: message,
         type: 'message',
         data: {
           'jobId': widget.job.id,
           'jobTitle': widget.job.title,
-          'applicantName': userData['username'],
+          'businessName': widget.job.restaurant,
+          'applicantName': userData['username'] ?? 'Anonymous',
+          'timestamp': FieldValue.serverTimestamp(),
         },
       );
 
@@ -189,6 +220,7 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
         );
       }
     } catch (e) {
+      print('Error sending message: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error sending message: $e')),
