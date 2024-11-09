@@ -64,6 +64,148 @@ class _ApplicationManagerScreenState extends State<ApplicationManagerScreen> {
     }
   }
 
+  Future<void> _acceptApplication(Map<String, dynamic> data, String notificationId) async {
+    try {
+      // Store chatRoomId in a function-scope variable
+      final String chatRoomId = '${widget.ownerId}_${data['senderId']}_${data['data']['jobId']}';
+      final String jobTitle = data['data']['jobTitle'] ?? 'Job Chat';
+
+      // Create chat room
+      await FirebaseFirestore.instance
+          .collection('chats')
+          .doc(chatRoomId)
+          .set({
+        'participants': [widget.ownerId, data['senderId']],
+        'jobId': data['data']['jobId'],
+        'jobTitle': jobTitle,
+        'businessName': data['data']['businessName'],
+        'lastMessage': data['message'],
+        'lastMessageTime': FieldValue.serverTimestamp(),
+        'lastSenderId': data['senderId'],
+        'unreadCount': 0,
+        'createdAt': FieldValue.serverTimestamp(),
+        'status': 'active',
+      });
+
+      // Add the initial message
+      await FirebaseFirestore.instance
+          .collection('chats')
+          .doc(chatRoomId)
+          .collection('messages')
+          .add({
+        'text': data['message'],
+        'senderId': data['senderId'],
+        'timestamp': FieldValue.serverTimestamp(),
+        'isRead': true,
+        'senderName': data['data']['applicantName']
+      });
+
+      // Update notification for owner
+      await FirebaseFirestore.instance
+          .collection('notifications')
+          .doc(notificationId)
+          .update({
+        'status': 'accepted',
+        'read': true,
+        'chatRoomId': chatRoomId
+      });
+
+      // Create notification for user
+      await FirebaseFirestore.instance
+          .collection('notifications')
+          .add({
+        'userId': data['senderId'],
+        'senderId': widget.ownerId,
+        'title': 'Application Update',
+        'message': data['message'],
+        'type': 'application_status',
+        'read': false,
+        'timestamp': FieldValue.serverTimestamp(),
+        'status': 'accepted',
+        'data': {
+          'jobId': data['data']['jobId'],
+          'jobTitle': jobTitle,
+          'businessName': data['data']['businessName'],
+          'chatRoomId': chatRoomId
+        }
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Application accepted')),
+        );
+
+        // Navigate to chat using stored variables
+        _openChat(chatRoomId, jobTitle);
+      }
+    } catch (e) {
+      print("Error accepting application: $e");
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error accepting application: $e')),
+        );
+      }
+    }
+  }
+
+// Add this method in the class
+  void _openChat(String chatRoomId, String jobTitle) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => ChatScreen(
+          chatRoomId: chatRoomId,
+          jobTitle: jobTitle,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _rejectApplication(String notificationId, Map<String, dynamic> data) async {
+    try {
+      // Update original notification
+      await FirebaseFirestore.instance
+          .collection('notifications')
+          .doc(notificationId)
+          .update({
+        'status': 'rejected',
+        'read': true,
+      });
+
+      // Create notification for user about rejection
+      await FirebaseFirestore.instance
+          .collection('notifications')
+          .add({
+        'userId': data['senderId'],  // Send to the applicant
+        'senderId': widget.ownerId,  // From the owner
+        'title': 'Application Update',
+        'message': data['message'],  // Original message
+        'type': 'application_status',
+        'read': false,
+        'timestamp': FieldValue.serverTimestamp(),
+        'status': 'rejected',
+        'data': {
+          'jobId': data['data']['jobId'],
+          'jobTitle': data['data']['jobTitle'],
+          'businessName': data['data']['businessName'],
+        }
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Application rejected')),
+        );
+      }
+    } catch (e) {
+      print("Error rejecting application: $e");
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error rejecting application: $e')),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -156,144 +298,47 @@ class _ApplicationManagerScreenState extends State<ApplicationManagerScreen> {
                           ),
                       ],
                     ),
-                    trailing: status == 'pending'
-                        ? Row(
+                    trailing: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        if (type == 'cv')
+                        if (status == 'pending') ...[
+                          if (type == 'cv')
+                            IconButton(
+                              icon: const Icon(Icons.description),
+                              onPressed: () async {
+                                final cvUrl = data['data']['cvUrl'];
+                                if (cvUrl != null) {
+                                  await launchUrl(Uri.parse(cvUrl));
+                                }
+                              },
+                              tooltip: 'View CV',
+                            ),
                           IconButton(
-                            icon: const Icon(Icons.description),
-                            onPressed: () async {
-                              final cvUrl = data['data']['cvUrl'];
-                              if (cvUrl != null) {
-                                await launchUrl(Uri.parse(cvUrl));
-                              }
-                            },
-                            tooltip: 'View CV',
+                            icon: const Icon(Icons.check_circle_outline),
+                            color: Colors.green,
+                            onPressed: () => _acceptApplication(data, notification.id),
+                            tooltip: 'Accept',
                           ),
+                          IconButton(
+                            icon: const Icon(Icons.cancel_outlined),
+                            color: Colors.red,
+                            onPressed: () => _rejectApplication(notification.id, data),
+                            tooltip: 'Reject',
+                          ),
+                        ],
                         IconButton(
-                          icon: const Icon(Icons.check_circle_outline),
-                          color: Colors.green,
-                          onPressed: () => _acceptApplication(data, notification.id),
-                          tooltip: 'Accept',
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.cancel_outlined),
-                          color: Colors.red,
-                          onPressed: () => _rejectApplication(notification.id),
-                          tooltip: 'Reject',
+                          icon: const Icon(Icons.delete_outline),
+                          onPressed: () => _deleteNotification(notification.id),
+                          tooltip: 'Delete',
                         ),
                       ],
-                    )
-                        : status == 'accepted'
-                        ? IconButton(
-                      icon: const Icon(Icons.chat),
-                      onPressed: () => _openChat(data),
-                    )
-                        : null,
+                    ),
                   ),
                 ),
               );
             },
           );
         },
-      ),
-    );
-  }
-
-  Future<void> _acceptApplication(Map<String, dynamic> data, String notificationId) async {
-    try {
-      final chatRoomId = '${widget.ownerId}_${data['senderId']}_${data['data']['jobId']}';
-
-      // Create chat room
-      await FirebaseFirestore.instance
-          .collection('chats')
-          .doc(chatRoomId)
-          .set({
-        'participants': [widget.ownerId, data['senderId']],
-        'jobId': data['data']['jobId'],
-        'jobTitle': data['data']['jobTitle'],
-        'businessName': data['data']['businessName'],
-        'lastMessage': data['message'],
-        'lastMessageTime': FieldValue.serverTimestamp(),
-        'lastSenderId': data['senderId'],
-        'unreadCount': 0,
-        'createdAt': FieldValue.serverTimestamp(),
-      });
-
-      // Add the initial message
-      await FirebaseFirestore.instance
-          .collection('chats')
-          .doc(chatRoomId)
-          .collection('messages')
-          .add({
-        'text': data['message'],
-        'senderId': data['senderId'],
-        'timestamp': FieldValue.serverTimestamp(),
-        'isRead': false,
-        'senderName': data['data']['applicantName'],
-        'isInitialMessage': true,
-      });
-
-      // Update notification
-      await FirebaseFirestore.instance
-          .collection('notifications')
-          .doc(notificationId)
-          .update({
-        'status': 'accepted',
-        'read': true,
-      });
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Application accepted')),
-        );
-        _openChat(data);
-      }
-    } catch (e) {
-      print("Error accepting application: $e");
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error accepting application: $e')),
-        );
-      }
-    }
-  }
-
-  Future<void> _rejectApplication(String notificationId) async {
-    try {
-      await FirebaseFirestore.instance
-          .collection('notifications')
-          .doc(notificationId)
-          .update({
-        'status': 'rejected',
-        'read': true,
-      });
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Application rejected')),
-        );
-      }
-    } catch (e) {
-      print("Error rejecting application: $e");
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error rejecting application: $e')),
-        );
-      }
-    }
-  }
-
-  void _openChat(Map<String, dynamic> data) {
-    final chatRoomId = '${widget.ownerId}_${data['senderId']}_${data['data']['jobId']}';
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => ChatScreen(
-          chatRoomId: chatRoomId,
-          jobTitle: data['data']['jobTitle'],
-        ),
       ),
     );
   }

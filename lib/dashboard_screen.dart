@@ -6,9 +6,10 @@ import 'package:hive_flutter/jobs_screen.dart';
 import 'package:hive_flutter/add_job_screen.dart';
 import 'package:hive_flutter/saved_jobs_screen.dart';
 import 'package:hive_flutter/application_manager_screen.dart';
-import 'package:hive_flutter/user_applications_screen.dart'; // Add this import
+import 'package:hive_flutter/user_applications_screen.dart';
 import 'package:hive_flutter/models/notification_model.dart';
 import 'package:hive_flutter/services/notification_service.dart';
+import 'package:hive_flutter/chat_list_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -20,7 +21,6 @@ class DashboardScreen extends StatefulWidget {
 class _DashboardScreenState extends State<DashboardScreen> {
   int _selectedIndex = 0;
   bool isBusinessOwner = false;
-
   late final List<Widget> _screens;
 
   @override
@@ -32,7 +32,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
   void fetchUserRole() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user != null) {
-      final docSnapshot = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+      final docSnapshot = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
       setState(() {
         isBusinessOwner = docSnapshot['isBusinessOwner'] ?? false;
         _initializeScreens();
@@ -76,7 +79,70 @@ class _DashboardScreenState extends State<DashboardScreen> {
     });
   }
 
-  Widget _buildApplicationButton() {
+  Widget _buildChatButton() {
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('chats')
+          .where('participants', arrayContains: FirebaseAuth.instance.currentUser?.uid)
+          .snapshots(),
+      builder: (context, snapshot) {
+        int unreadChats = 0;
+        if (snapshot.hasData) {
+          for (var doc in snapshot.data!.docs) {
+            final data = doc.data() as Map<String, dynamic>;
+            final unreadCount = data['unreadCount'] as int? ?? 0;
+            final lastSenderId = data['lastSenderId'] as String?;
+
+            if (lastSenderId != FirebaseAuth.instance.currentUser?.uid && unreadCount > 0) {
+              unreadChats++;
+            }
+          }
+        }
+
+        return Stack(
+          children: [
+            IconButton(
+              icon: const Icon(Icons.chat_bubble_outline),
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => ChatListScreen(),
+                  ),
+                );
+              },
+            ),
+            if (unreadChats > 0)
+              Positioned(
+                right: 0,
+                top: 0,
+                child: Container(
+                  padding: const EdgeInsets.all(2),
+                  decoration: BoxDecoration(
+                    color: Colors.red,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  constraints: const BoxConstraints(
+                    minWidth: 20,
+                    minHeight: 20,
+                  ),
+                  child: Text(
+                    '$unreadChats',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 12,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildNotificationButton() {
     return StreamBuilder<List<NotificationModel>>(
       stream: NotificationService().getNotifications(
         FirebaseAuth.instance.currentUser!.uid,
@@ -133,6 +199,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
+  void _onItemTapped(int index) {
+    setState(() {
+      _selectedIndex = index;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     List<BottomNavigationBarItem> navBarItems = [
@@ -146,7 +218,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('App'),
-        leading: _buildApplicationButton(), // Show for both users and owners
+        leading: _buildChatButton(), // Chat icon on top left
+        actions: [
+          _buildNotificationButton(), // Notification icon on top right
+        ],
       ),
       body: IndexedStack(
         index: _selectedIndex,
@@ -160,11 +235,5 @@ class _DashboardScreenState extends State<DashboardScreen> {
         onTap: _onItemTapped,
       ),
     );
-  }
-
-  void _onItemTapped(int index) {
-    setState(() {
-      _selectedIndex = index;
-    });
   }
 }
