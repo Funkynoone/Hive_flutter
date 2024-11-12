@@ -12,9 +12,12 @@ class AddJobScreen extends StatefulWidget {
 class _AddJobScreenState extends State<AddJobScreen> {
   final _formKey = GlobalKey<FormState>();
   final TextEditingController _jobDescriptionController = TextEditingController();
+  final TextEditingController _salaryController = TextEditingController();
   String? _selectedJobTitle;
   String? _selectedJobType;
   String? _selectedRegion;
+  String? _selectedSalaryType;
+  bool _salaryNotGiven = false;
 
   String? _businessName;
   double? _businessLatitude;
@@ -30,6 +33,7 @@ class _AddJobScreenState extends State<AddJobScreen> {
     'Attica', 'Sterea Ellada', 'Peloponnisus', 'Epirus', 'Thessalia',
     'Thraki', 'Ionian islands', 'Aegean islands', 'Creta'
   ];
+  final List<String> salaryTypes = ['per hour', 'per month'];
 
   @override
   void initState() {
@@ -51,15 +55,12 @@ class _AddJobScreenState extends State<AddJobScreen> {
           setState(() {
             _businessName = userData.data()?['businessName'];
             _businessLatitude = userData.data()?['businessLocation']?.latitude;
-            _businessLongitude =
-                userData.data()?['businessLocation']?.longitude;
+            _businessLongitude = userData.data()?['businessLocation']?.longitude;
           });
 
-          if (_businessName == null || _businessLatitude == null ||
-              _businessLongitude == null) {
+          if (_businessName == null || _businessLatitude == null || _businessLongitude == null) {
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text(
-                  'Business location not found. Please update your profile.')),
+              const SnackBar(content: Text('Business location not found. Please update your profile.')),
             );
           }
         }
@@ -76,6 +77,7 @@ class _AddJobScreenState extends State<AddJobScreen> {
   @override
   void dispose() {
     _jobDescriptionController.dispose();
+    _salaryController.dispose();
     super.dispose();
   }
 
@@ -112,9 +114,7 @@ class _AddJobScreenState extends State<AddJobScreen> {
                             ),
                             const SizedBox(height: 8),
                             Text(
-                              'Location: ${_businessLatitude?.toStringAsFixed(
-                                  6)}, ${_businessLongitude?.toStringAsFixed(
-                                  6)}',
+                              'Location: ${_businessLatitude?.toStringAsFixed(6)}, ${_businessLongitude?.toStringAsFixed(6)}',
                               style: const TextStyle(color: Colors.grey),
                             ),
                           ],
@@ -133,13 +133,9 @@ class _AddJobScreenState extends State<AddJobScreen> {
                         setState(() => _selectedJobTitle = value);
                       },
                       items: jobTitles.map((title) {
-                        return DropdownMenuItem(value: title,
-                            child: Text(title));
+                        return DropdownMenuItem(value: title, child: Text(title));
                       }).toList(),
-                      validator: (value) =>
-                      value == null
-                          ? 'Please select a job title'
-                          : null,
+                      validator: (value) => value == null ? 'Please select a job title' : null,
                     ),
                     const SizedBox(height: 16),
 
@@ -155,10 +151,7 @@ class _AddJobScreenState extends State<AddJobScreen> {
                       items: jobTypes.map((type) {
                         return DropdownMenuItem(value: type, child: Text(type));
                       }).toList(),
-                      validator: (value) =>
-                      value == null
-                          ? 'Please select a job type'
-                          : null,
+                      validator: (value) => value == null ? 'Please select a job type' : null,
                     ),
                     const SizedBox(height: 16),
 
@@ -171,13 +164,93 @@ class _AddJobScreenState extends State<AddJobScreen> {
                       onChanged: (String? newValue) {
                         setState(() => _selectedRegion = newValue);
                       },
-                      items: regions.map<DropdownMenuItem<String>>((
-                          String value) {
+                      items: regions.map<DropdownMenuItem<String>>((String value) {
                         return DropdownMenuItem<String>(
                           value: value,
                           child: Text(value),
                         );
                       }).toList(),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Salary Section
+                    Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(16.0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                const Text(
+                                  'Salary Information',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 16,
+                                  ),
+                                ),
+                                const Spacer(),
+                                Row(
+                                  children: [
+                                    const Text('Not Given'),
+                                    Switch(
+                                      value: _salaryNotGiven,
+                                      onChanged: (bool value) {
+                                        setState(() {
+                                          _salaryNotGiven = value;
+                                          if (value) {
+                                            _salaryController.clear();
+                                            _selectedSalaryType = null;
+                                          }
+                                        });
+                                      },
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                            if (!_salaryNotGiven) ...[
+                              const SizedBox(height: 16),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    flex: 2,
+                                    child: TextFormField(
+                                      controller: _salaryController,
+                                      decoration: const InputDecoration(
+                                        labelText: 'Salary',
+                                        border: OutlineInputBorder(),
+                                        prefixText: '€',
+                                      ),
+                                      keyboardType: TextInputType.number,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 16),
+                                  Expanded(
+                                    flex: 1,
+                                    child: DropdownButtonFormField<String>(
+                                      value: _selectedSalaryType,
+                                      decoration: const InputDecoration(
+                                        labelText: 'Type',
+                                        border: OutlineInputBorder(),
+                                      ),
+                                      items: salaryTypes.map((type) {
+                                        return DropdownMenuItem(
+                                          value: type,
+                                          child: Text(type),
+                                        );
+                                      }).toList(),
+                                      onChanged: (value) {
+                                        setState(() => _selectedSalaryType = value);
+                                      },
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
                     ),
                     const SizedBox(height: 16),
 
@@ -188,17 +261,12 @@ class _AddJobScreenState extends State<AddJobScreen> {
                         border: OutlineInputBorder(),
                       ),
                       maxLines: 6,
-                      validator: (value) =>
-                      value!.isEmpty
-                          ? 'Please enter a job description'
-                          : null,
+                      validator: (value) => value!.isEmpty ? 'Please enter a job description' : null,
                     ),
                     const SizedBox(height: 20),
 
                     ElevatedButton(
-                      onPressed: (_businessLatitude != null && !_isSaving)
-                          ? _addJobOffer
-                          : null,
+                      onPressed: (_businessLatitude != null && !_isSaving) ? _addJobOffer : null,
                       style: ElevatedButton.styleFrom(
                         minimumSize: const Size(double.infinity, 50),
                       ),
@@ -207,8 +275,7 @@ class _AddJobScreenState extends State<AddJobScreen> {
                         height: 20,
                         width: 20,
                         child: CircularProgressIndicator(
-                          valueColor: AlwaysStoppedAnimation<Color>(Colors
-                              .white),
+                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                           strokeWidth: 2,
                         ),
                       )
@@ -236,10 +303,8 @@ class _AddJobScreenState extends State<AddJobScreen> {
   void _addJobOffer() async {
     if (_formKey.currentState!.validate()) {
       try {
-        // Disable the button while saving
         setState(() => _isSaving = true);
 
-        // Create the job listing
         await FirebaseFirestore.instance.collection('JobListings').add({
           'ownerId': FirebaseAuth.instance.currentUser!.uid,
           'title': _selectedJobTitle,
@@ -254,17 +319,18 @@ class _AddJobScreenState extends State<AddJobScreen> {
           'latitude': _businessLatitude,
           'longitude': _businessLongitude,
           'createdAt': FieldValue.serverTimestamp(),
-          'imageUrl': 'https://via.placeholder.com/50',
+          'imageUrl': 'https://images.unsplash.com/photo-1514933651103-005eec06c04b?q=80&w=1000',
+          'salary': _salaryNotGiven ? null : _salaryController.text,
+          'salaryType': _salaryNotGiven ? null : _selectedSalaryType,
+          'salaryNotGiven': _salaryNotGiven,
         });
 
         if (!mounted) return;
 
-        // Show success message before navigation
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Job offer added successfully')),
         );
 
-        // Wait a moment for the SnackBar to appear, then navigate
         await Future.delayed(const Duration(milliseconds: 500));
 
         if (!mounted) return;
