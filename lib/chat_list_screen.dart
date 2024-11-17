@@ -4,6 +4,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'chat_screen.dart';
 
 class ChatListScreen extends StatefulWidget {
+  const ChatListScreen({super.key});
+
   @override
   _ChatListScreenState createState() => _ChatListScreenState();
 }
@@ -220,9 +222,9 @@ class _ChatListScreenState extends State<ChatListScreen> {
                       icon: const Icon(Icons.more_vert),
                       itemBuilder: (context) => [
                         PopupMenuItem(
-                          child: ListTile(
-                            leading: const Icon(Icons.delete),
-                            title: const Text('Delete Chat'),
+                          child: const ListTile(
+                            leading: Icon(Icons.delete),
+                            title: Text('Delete Chat'),
                             contentPadding: EdgeInsets.zero,
                           ),
                           onTap: () => _deleteChat(chat.id),

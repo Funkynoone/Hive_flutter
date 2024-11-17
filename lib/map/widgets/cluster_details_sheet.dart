@@ -7,10 +7,10 @@ class ClusterDetailsSheet extends StatelessWidget {
   final Function(Job) onJobSelected;
 
   const ClusterDetailsSheet({
-    Key? key,
+    super.key,
     required this.jobs,
     required this.onJobSelected,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {

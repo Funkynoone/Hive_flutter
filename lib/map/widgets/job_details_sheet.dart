@@ -3,72 +3,112 @@ import 'package:hive_flutter/models/job.dart';
 import '../utils/job_marker_utils.dart';
 import '../services/job_application_service.dart';
 
-class JobDetailsSheet extends StatelessWidget {
+class JobDetailsSheet extends StatefulWidget {
   final Job job;
-  final bool isFullDetails;
-  final bool isUploading;
-  final bool isSending;
-  final Function(DragEndDetails) onVerticalDragEnd;
   final Function(bool) setUploading;
   final Function(bool) setSending;
-  final double animationValue;
 
   const JobDetailsSheet({
     Key? key,
     required this.job,
-    required this.isFullDetails,
-    required this.isUploading,
-    required this.isSending,
-    required this.onVerticalDragEnd,
     required this.setUploading,
     required this.setSending,
-    required this.animationValue,
   }) : super(key: key);
 
   @override
+  State<JobDetailsSheet> createState() => _JobDetailsSheetState();
+}
+
+class _JobDetailsSheetState extends State<JobDetailsSheet> {
+  final DraggableScrollableController _controller = DraggableScrollableController();
+  bool _isExpanded = false;
+  bool _isUploading = false;
+  bool _isSending = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller.addListener(_onDragUpdate);
+  }
+
+  @override
+  void dispose() {
+    _controller.removeListener(_onDragUpdate);
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _onDragUpdate() {
+    setState(() {
+      _isExpanded = _controller.size > 0.6;
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onVerticalDragEnd: onVerticalDragEnd,
-      child: Container(
-        height: isFullDetails
-            ? MediaQuery.of(context).size.height * 0.8
-            : 140 * animationValue,
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.2),
-              spreadRadius: 2,
-              blurRadius: 10,
-            ),
-          ],
-        ),
-        child: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildDragHandle(),
-              Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _buildHeader(),
-                    const SizedBox(height: 12),
-                    _buildTags(),
-                    const SizedBox(height: 12),
-                    if (!isFullDetails)
-                      _buildCollapsedContent(context)
-                    else
-                      _buildExpandedContent(context),
-                  ],
-                ),
+    return DraggableScrollableSheet(
+      initialChildSize: 0.3,
+      minChildSize: 0.3,
+      maxChildSize: 0.9,
+      snap: true,
+      snapSizes: const [0.3, 0.9],
+      controller: _controller,
+      builder: (context, scrollController) {
+        return Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.2),
+                spreadRadius: 2,
+                blurRadius: 10,
               ),
             ],
           ),
-        ),
-      ),
+          child: SingleChildScrollView(
+            controller: scrollController,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _buildDragHandle(),
+                Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildHeader(),
+                      const SizedBox(height: 12),
+                      _buildTags(),
+                      const SizedBox(height: 16),
+                      if (_isExpanded) ...[
+                        _buildFullDescription(),
+                        const SizedBox(height: 16),
+                        _buildButtons(context),
+                      ] else ...[
+                        _buildCompactDescription(),
+                        Center(
+                          child: Padding(
+                            padding: const EdgeInsets.only(top: 8),
+                            child: Text(
+                              'Drag up for more details',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey[400],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -92,12 +132,12 @@ class JobDetailsSheet extends StatelessWidget {
         Container(
           padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
-            color: JobMarkerUtils.getJobColor(job.category).withOpacity(0.1),
+            color: JobMarkerUtils.getJobColor(widget.job.category).withOpacity(0.1),
             borderRadius: BorderRadius.circular(8),
           ),
           child: Icon(
-            JobMarkerUtils.getJobIcon(job.category),
-            color: JobMarkerUtils.getJobColor(job.category),
+            JobMarkerUtils.getJobIcon(widget.job.category),
+            color: JobMarkerUtils.getJobColor(widget.job.category),
           ),
         ),
         const SizedBox(width: 12),
@@ -106,7 +146,7 @@ class JobDetailsSheet extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                job.restaurant,
+                widget.job.restaurant,
                 style: const TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
@@ -114,7 +154,7 @@ class JobDetailsSheet extends StatelessWidget {
               ),
               const SizedBox(height: 4),
               Text(
-                job.title,
+                widget.job.title,
                 style: const TextStyle(fontSize: 16),
               ),
             ],
@@ -130,43 +170,39 @@ class JobDetailsSheet extends StatelessWidget {
       runSpacing: 8,
       children: [
         _buildTag(
-          icon: Icons.work_outline,
-          text: job.type,
-          color: Colors.blue,
+          Icons.work_outline,
+          widget.job.type,
+          Colors.blue,
         ),
         _buildTag(
-          icon: Icons.euro,
-          text: job.salaryNotGiven
+          Icons.euro,
+          widget.job.salaryNotGiven
               ? 'Not Given'
-              : '${job.salary} ${job.salaryType}',
-          color: Colors.green,
+              : '${widget.job.salary} ${widget.job.salaryType}',
+          Colors.green,
         ),
       ],
     );
   }
 
-  Widget _buildTag({
-    required IconData icon,
-    required String text,
-    required Color color,
-  }) {
+  Widget _buildTag(IconData icon, String text, Color color) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),  // Changed from shade50
+        color: color.withOpacity(0.1),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withOpacity(0.3)),  // Changed from shade100
+        border: Border.all(color: color.withOpacity(0.3)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 16, color: color),  // Changed from shade700
+          Icon(icon, size: 16, color: color),
           const SizedBox(width: 4),
           Text(
             text,
             style: TextStyle(
               fontSize: 12,
-              color: color,  // Changed from shade700
+              color: color,
             ),
           ),
         ],
@@ -174,71 +210,56 @@ class JobDetailsSheet extends StatelessWidget {
     );
   }
 
-  Widget _buildCollapsedContent(BuildContext context) {
+  Widget _buildCompactDescription() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          job.description.length > 100
-              ? '${job.description.substring(0, 100)}...'
-              : job.description,
+          widget.job.description,
+          maxLines: 3,
+          overflow: TextOverflow.ellipsis,
           style: TextStyle(
             fontSize: 14,
             color: Colors.grey[600],
           ),
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-        ),
-        Center(
-          child: Padding(
-            padding: const EdgeInsets.only(top: 8),
-            child: Text(
-              'Swipe up for more details',
-              style: TextStyle(
-                fontSize: 12,
-                color: Colors.grey[400],
-              ),
-            ),
-          ),
         ),
       ],
     );
   }
 
-  Widget _buildExpandedContent(BuildContext context) {
+  Widget _buildFullDescription() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const SizedBox(height: 16),
-        _buildSection('Job Description', job.description),
-        const SizedBox(height: 24),
-        _buildSection('Requirements', job.requirements),
-        const SizedBox(height: 24),
-        _buildButtons(context),
-        const SizedBox(height: 24),
-      ],
-    );
-  }
-
-  Widget _buildSection(String title, String content) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          title,
+        const Text(
+          'Description',
           style: TextStyle(
             fontSize: 18,
             fontWeight: FontWeight.bold,
-            color: Colors.grey[800],
           ),
         ),
         const SizedBox(height: 8),
         Text(
-          content,
+          widget.job.description,
           style: TextStyle(
             fontSize: 14,
             color: Colors.grey[600],
-            height: 1.5,
+          ),
+        ),
+        const SizedBox(height: 16),
+        const Text(
+          'Requirements',
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          widget.job.requirements,
+          style: TextStyle(
+            fontSize: 14,
+            color: Colors.grey[600],
           ),
         ),
       ],
@@ -247,34 +268,54 @@ class JobDetailsSheet extends StatelessWidget {
 
   Widget _buildButtons(BuildContext context) {
     return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
       children: [
-        ElevatedButton.icon(
-          onPressed: isUploading
-              ? null
-              : () => JobApplicationService.uploadCV(job, context, setUploading),
-          icon: const Icon(Icons.upload_file),
-          label: Text(isUploading ? 'Uploading...' : 'Upload CV'),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: Theme.of(context).primaryColor,
-            foregroundColor: Colors.white,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        Expanded(
+          child: ElevatedButton.icon(
+            onPressed: _isUploading
+                ? null
+                : () async {
+              setState(() => _isUploading = true);
+              widget.setUploading(true);
+              await JobApplicationService.uploadCV(
+                widget.job,
+                context,
+                    (value) {
+                  setState(() => _isUploading = value);
+                  widget.setUploading(value);
+                },
+              );
+            },
+            icon: const Icon(Icons.upload_file),
+            label: Text(_isUploading ? 'Uploading...' : 'Upload CV'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Theme.of(context).primaryColor,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(vertical: 12),
+            ),
           ),
         ),
-        ElevatedButton.icon(
-          onPressed: isSending
-              ? null
-              : () => JobApplicationService.showMessageDialog(
-            context,
-            job,
-            setSending,
-          ),
-          icon: const Icon(Icons.message),
-          label: Text(isSending ? 'Sending...' : 'Send Message'),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.green,
-            foregroundColor: Colors.white,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        const SizedBox(width: 8),
+        Expanded(
+          child: ElevatedButton.icon(
+            onPressed: _isSending
+                ? null
+                : () {
+              JobApplicationService.showMessageDialog(
+                context,
+                widget.job,
+                    (value) {
+                  setState(() => _isSending = value);
+                  widget.setSending(value);
+                },
+              );
+            },
+            icon: const Icon(Icons.message),
+            label: Text(_isSending ? 'Sending...' : 'Contact Owner'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.green,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(vertical: 12),
+            ),
           ),
         ),
       ],

@@ -7,6 +7,7 @@ import 'map/utils/job_marker_utils.dart';
 import 'map/widgets/job_details_sheet.dart';
 import 'map/widgets/cluster_details_sheet.dart';
 import 'map/controllers/map_controller_helper.dart';
+import 'map/widgets/radial_job_menu.dart';
 
 class MapFilterScreen extends StatefulWidget {
   final List<Job>? initialJobs;
@@ -25,6 +26,7 @@ class _MapFilterScreenState extends State<MapFilterScreen>
   bool _isSending = false;
   bool _isUploading = false;
   bool showClusterDetails = false;
+  Offset? _radialMenuPosition;
   final MapController mapController = MapController();
   final PopupController _popupController = PopupController();
   late AnimationController _animationController;
@@ -49,14 +51,31 @@ class _MapFilterScreenState extends State<MapFilterScreen>
     super.dispose();
   }
 
-  void _handleMarkerTap(Job job) {
+  void _handleMarkerTap(Job job, {bool showSheet = true}) {
     setState(() {
       selectedJob = job;
       selectedClusterJobs = null;
       showClusterDetails = false;
+      _radialMenuPosition = null;
       isFullDetails = false;
       _animationController.forward(from: 0.0);
     });
+    if (showSheet) {
+      _showJobDetails(job);
+    }
+  }
+
+  void _showJobDetails(Job job) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => JobDetailsSheet(
+        job: job,
+        setUploading: (value) => setState(() => _isUploading = value),
+        setSending: (value) => setState(() => _isSending = value),
+      ),
+    );
   }
 
   void _handleClusterTap(List<Marker> markers, LatLng center) {
@@ -66,30 +85,52 @@ class _MapFilterScreenState extends State<MapFilterScreen>
             job.longitude == markers[0].point.longitude,
       );
       if (job != null) {
-        _handleMarkerTap(job);
+        _handleMarkerTap(job, showSheet: false);
       }
     } else {
-      final newZoom = MapControllerHelper.calculateOptimalZoom(
-        markers,
-        mapController.zoom,
-      );
+      final Map<String, Job> uniqueJobs = {};
 
-      if ((newZoom - mapController.zoom).abs() < 0.5) {
-        final jobs = markers.map((m) => widget.initialJobs!.firstWhere(
-              (job) =>
-          job.latitude == m.point.latitude &&
-              job.longitude == m.point.longitude,
-        )).toList();
+      for (var marker in markers) {
+        final job = widget.initialJobs!.firstWhere(
+              (job) => job.latitude == marker.point.latitude &&
+              job.longitude == marker.point.longitude,
+          orElse: () => widget.initialJobs!.first,
+        );
+        uniqueJobs[job.id] = job;
+      }
 
-        setState(() {
-          selectedClusterJobs = jobs;
-          selectedJob = null;
-          showClusterDetails = true;
-          isFullDetails = false;
-          _animationController.forward(from: 0.0);
-        });
+      final jobs = uniqueJobs.values.toList();
+      final sameOwner = jobs.every((job) => job.restaurant == jobs.first.restaurant);
+
+      if (sameOwner && jobs.length > 1) {
+        final screenPoint = mapController.latLngToScreenPoint(center);
+        if (screenPoint != null) {
+          setState(() {
+            _radialMenuPosition = Offset(screenPoint.x.toDouble(), screenPoint.y.toDouble());
+            selectedClusterJobs = jobs;
+            selectedJob = null;
+            showClusterDetails = false;
+          });
+        }
+      } else if (jobs.length == 1) {
+        _handleMarkerTap(jobs.first);
       } else {
-        mapController.move(center, newZoom);
+        final newZoom = MapControllerHelper.calculateOptimalZoom(
+          markers,
+          mapController.zoom,
+        );
+
+        if ((newZoom - mapController.zoom).abs() < 0.5) {
+          setState(() {
+            selectedClusterJobs = jobs;
+            selectedJob = null;
+            showClusterDetails = true;
+            isFullDetails = false;
+            _animationController.forward(from: 0.0);
+          });
+        } else {
+          mapController.move(center, newZoom);
+        }
       }
     }
   }
@@ -99,21 +140,10 @@ class _MapFilterScreenState extends State<MapFilterScreen>
       selectedJob = null;
       selectedClusterJobs = null;
       showClusterDetails = false;
+      _radialMenuPosition = null;
       isFullDetails = false;
       _animationController.reverse();
     });
-  }
-
-  void _handleDragEnd(DragEndDetails details) {
-    if (details.primaryVelocity! < -500) {
-      setState(() {
-        isFullDetails = true;
-      });
-    } else if (details.primaryVelocity! > 500) {
-      setState(() {
-        isFullDetails = false;
-      });
-    }
   }
 
   @override
@@ -131,8 +161,28 @@ class _MapFilterScreenState extends State<MapFilterScreen>
       body: Stack(
         children: [
           _buildMap(),
-          if (selectedJob != null) _buildJobDetailsSheet(),
           if (showClusterDetails) _buildClusterDetailsSheet(),
+          if (_radialMenuPosition != null && selectedClusterJobs != null)
+            RadialJobMenu(
+              jobs: selectedClusterJobs!,
+              center: _radialMenuPosition!,
+              onJobSelected: (job) {
+                setState(() {
+                  selectedJob = job;
+                  _radialMenuPosition = null;
+                  selectedClusterJobs = null;
+                  isFullDetails = false;
+                  _animationController.forward(from: 0.0);
+                });
+                _showJobDetails(job);
+              },
+              onDismiss: () {
+                setState(() {
+                  _radialMenuPosition = null;
+                  selectedClusterJobs = null;
+                });
+              },
+            ),
         ],
       ),
     );
@@ -151,11 +201,9 @@ class _MapFilterScreenState extends State<MapFilterScreen>
       ),
       children: [
         TileLayer(
-          urlTemplate:
-          "https://api.mapbox.com/styles/v1/{id}/tiles/{z}/{x}/{y}?access_token={accessToken}",
+          urlTemplate: "https://api.mapbox.com/styles/v1/{id}/tiles/{z}/{x}/{y}?access_token={accessToken}",
           additionalOptions: const {
-            'accessToken':
-            'pk.eyJ1IjoiYW5hbmlhczEzIiwiYSI6ImNseDliMjJvYTJoYWcyanF1ZHoybGViYzMifQ.nJ8im-LnmEld5GrEDBaeUQ',
+            'accessToken': 'pk.eyJ1IjoiYW5hbmlhczEzIiwiYSI6ImNseDliMjJvYTJoYWcyanF1ZHoybGViYzMifQ.nJ8im-LnmEld5GrEDBaeUQ',
             'id': 'mapbox/streets-v11',
           },
         ),
@@ -166,7 +214,6 @@ class _MapFilterScreenState extends State<MapFilterScreen>
             markers: _buildMarkers(),
             builder: _buildCluster,
             onClusterTap: (cluster) {
-              // Get the center point of the cluster using its bounds
               final centerPoint = LatLng(
                 (cluster.bounds.north + cluster.bounds.south) / 2,
                 (cluster.bounds.east + cluster.bounds.west) / 2,
@@ -195,8 +242,7 @@ class _MapFilterScreenState extends State<MapFilterScreen>
           child: _buildMarkerIcon(job),
         ),
       );
-    }).toList() ??
-        [];
+    }).toList() ?? [];
   }
 
   Widget _buildMarkerIcon(Job job) {
@@ -228,8 +274,7 @@ class _MapFilterScreenState extends State<MapFilterScreen>
   Widget _buildCluster(BuildContext context, List<Marker> markers) {
     final categories = markers
         .map((m) => widget.initialJobs!.firstWhere(
-          (job) =>
-      job.latitude == m.point.latitude &&
+          (job) => job.latitude == m.point.latitude &&
           job.longitude == m.point.longitude,
     ))
         .expand((job) => job.category)
@@ -252,65 +297,42 @@ class _MapFilterScreenState extends State<MapFilterScreen>
           ),
         ],
       ),
-      child: _buildClusterContent(markers, categories, color),
-    );
-  }
-
-  Widget _buildClusterContent(
-      List<Marker> markers, Set<dynamic> categories, Color color) {
-    return Stack(
-      children: [
-        Center(
-          child: Text(
-            markers.length.toString(),
-            style: TextStyle(
-              color: color,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-        ),
-        if (categories.length > 1)
-          Positioned(
-            right: 0,
-            bottom: 0,
-            child: Container(
-              padding: const EdgeInsets.all(4),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                shape: BoxShape.circle,
-                border: Border.all(
-                  color: color,
-                  width: 1,
-                ),
-              ),
-              child: Text(
-                '${categories.length}',
-                style: TextStyle(
-                  fontSize: 10,
-                  color: color,
-                ),
+      child: Stack(
+        children: [
+          Center(
+            child: Text(
+              markers.length.toString(),
+              style: TextStyle(
+                color: color,
+                fontWeight: FontWeight.bold,
               ),
             ),
           ),
-      ],
-    );
-  }
-
-  Widget _buildJobDetailsSheet() {
-    return AnimatedBuilder(
-      animation: _animation,
-      builder: (context, child) {
-        return JobDetailsSheet(
-          job: selectedJob!,
-          isFullDetails: isFullDetails,
-          isUploading: _isUploading,
-          isSending: _isSending,
-          onVerticalDragEnd: _handleDragEnd,
-          setUploading: (value) => setState(() => _isUploading = value),
-          setSending: (value) => setState(() => _isSending = value),
-          animationValue: _animation.value,
-        );
-      },
+          if (categories.length > 1)
+            Positioned(
+              right: 0,
+              bottom: 0,
+              child: Container(
+                padding: const EdgeInsets.all(4),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: color,
+                    width: 1,
+                  ),
+                ),
+                child: Text(
+                  '${categories.length}',
+                  style: TextStyle(
+                    fontSize: 10,
+                    color: color,
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
     );
   }
 
@@ -329,19 +351,13 @@ class _MapFilterScreenState extends State<MapFilterScreen>
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            JobMarkerUtils.buildLegendItem(
-                Icons.restaurant, 'Cook', Colors.orange),
+            JobMarkerUtils.buildLegendItem(Icons.restaurant, 'Cook', Colors.orange),
             JobMarkerUtils.buildLegendItem(Icons.local_bar, 'Bar', Colors.purple),
-            JobMarkerUtils.buildLegendItem(
-                Icons.room_service, 'Service', Colors.blue),
-            JobMarkerUtils.buildLegendItem(
-                Icons.manage_accounts, 'Manager', Colors.green),
-            JobMarkerUtils.buildLegendItem(
-                Icons.delivery_dining, 'Delivery', Colors.red),
-            JobMarkerUtils.buildLegendItem(
-                Icons.cleaning_services, 'Cleaning', Colors.teal),
-            JobMarkerUtils.buildLegendItem(
-                Icons.wine_bar, 'Sommelier', Colors.deepPurple),
+            JobMarkerUtils.buildLegendItem(Icons.room_service, 'Service', Colors.blue),
+            JobMarkerUtils.buildLegendItem(Icons.manage_accounts, 'Manager', Colors.green),
+            JobMarkerUtils.buildLegendItem(Icons.delivery_dining, 'Delivery', Colors.red),
+            JobMarkerUtils.buildLegendItem(Icons.cleaning_services, 'Cleaning', Colors.teal),
+            JobMarkerUtils.buildLegendItem(Icons.wine_bar, 'Sommelier', Colors.deepPurple),
           ],
         ),
         actions: [

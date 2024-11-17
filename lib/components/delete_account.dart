@@ -3,7 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 class DeleteAccountButton extends StatelessWidget {
-  const DeleteAccountButton({Key? key}) : super(key: key);
+  const DeleteAccountButton({super.key});
 
   @override
   Widget build(BuildContext context) {
