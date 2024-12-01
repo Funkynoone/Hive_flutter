@@ -52,17 +52,13 @@ class _MapFilterScreenState extends State<MapFilterScreen>
   }
 
   void _handleMarkerTap(Job job, {bool showSheet = true}) {
+    print("Selected job details - Title: ${job.title}, Restaurant: ${job.restaurant}");
     setState(() {
       selectedJob = job;
       selectedClusterJobs = null;
-      showClusterDetails = false;
       _radialMenuPosition = null;
-      isFullDetails = false;
-      _animationController.forward(from: 0.0);
     });
-    if (showSheet) {
-      _showJobDetails(job);
-    }
+    if (showSheet) _showJobDetails(job);
   }
 
   void _showJobDetails(Job job) {
@@ -79,59 +75,60 @@ class _MapFilterScreenState extends State<MapFilterScreen>
   }
 
   void _handleClusterTap(List<Marker> markers, LatLng center) {
-    if (markers.length == 1) {
-      final job = widget.initialJobs?.firstWhere(
-            (job) => job.latitude == markers[0].point.latitude &&
-            job.longitude == markers[0].point.longitude,
-      );
-      if (job != null) {
-        _handleMarkerTap(job, showSheet: false);
-      }
-    } else {
-      final Map<String, Job> uniqueJobs = {};
+    print("Raw markers: ${markers.length}");
 
-      for (var marker in markers) {
-        final job = widget.initialJobs!.firstWhere(
+    final Map<String, Job> uniqueJobs = {};
+    for (var marker in markers) {
+      print("Checking marker at: ${marker.point}");
+      final jobsAtLocation = widget.initialJobs!.where(
               (job) => job.latitude == marker.point.latitude &&
-              job.longitude == marker.point.longitude,
-          orElse: () => widget.initialJobs!.first,
-        );
+              job.longitude == marker.point.longitude
+      ).toList();
+      print("Found ${jobsAtLocation.length} jobs at location");
+
+      for (var job in jobsAtLocation) {
         uniqueJobs[job.id] = job;
       }
+    }
 
-      final jobs = uniqueJobs.values.toList();
-      final sameOwner = jobs.every((job) => job.restaurant == jobs.first.restaurant);
+    final jobs = uniqueJobs.values.toList();
+    print("Total unique jobs: ${jobs.length}");
 
-      if (sameOwner && jobs.length > 1) {
-        final screenPoint = mapController.latLngToScreenPoint(center);
-        if (screenPoint != null) {
-          setState(() {
-            _radialMenuPosition = Offset(screenPoint.x.toDouble(), screenPoint.y.toDouble());
-            selectedClusterJobs = jobs;
-            selectedJob = null;
-            showClusterDetails = false;
-          });
-        }
-      } else if (jobs.length == 1) {
-        _handleMarkerTap(jobs.first);
-      } else {
-        final newZoom = MapControllerHelper.calculateOptimalZoom(
-          markers,
-          mapController.zoom,
-        );
-
-        if ((newZoom - mapController.zoom).abs() < 0.5) {
-          setState(() {
-            selectedClusterJobs = jobs;
-            selectedJob = null;
-            showClusterDetails = true;
-            isFullDetails = false;
-            _animationController.forward(from: 0.0);
-          });
-        } else {
-          mapController.move(center, newZoom);
-        }
+    final sameOwner = jobs.every((job) => job.restaurant == jobs.first.restaurant);
+    if (sameOwner) {
+      print("Jobs in cluster: ${jobs.length}");
+      print("Unique jobs restaurant: ${uniqueJobs.values.first.restaurant}");
+      print("All job titles: ${uniqueJobs.values.map((j) => j.title).join(', ')}");
+      if (jobs.length != uniqueJobs.length) {  // Fixed here
+        print("Mismatch in job count vs unique jobs");
       }
+      final screenPoint = mapController.latLngToScreenPoint(center);
+      if (screenPoint != null) {
+        setState(() {
+          selectedClusterJobs = uniqueJobs.values.toList(); // Use unique jobs only
+          _radialMenuPosition = Offset(screenPoint.x.toDouble(), screenPoint.y.toDouble());
+          selectedJob = null;
+          showClusterDetails = false;
+        });
+      }
+      return;
+    }
+
+    final newZoom = MapControllerHelper.calculateOptimalZoom(
+      markers,
+      mapController.zoom,
+    );
+
+    if ((newZoom - mapController.zoom).abs() < 0.5) {
+      setState(() {
+        selectedClusterJobs = jobs;
+        selectedJob = null;
+        showClusterDetails = true;
+        isFullDetails = false;
+        _animationController.forward(from: 0.0);
+      });
+    } else {
+      mapController.move(center, newZoom);
     }
   }
 
@@ -166,16 +163,7 @@ class _MapFilterScreenState extends State<MapFilterScreen>
             RadialJobMenu(
               jobs: selectedClusterJobs!,
               center: _radialMenuPosition!,
-              onJobSelected: (job) {
-                setState(() {
-                  selectedJob = job;
-                  _radialMenuPosition = null;
-                  selectedClusterJobs = null;
-                  isFullDetails = false;
-                  _animationController.forward(from: 0.0);
-                });
-                _showJobDetails(job);
-              },
+              onJobSelected: (job) => _handleMarkerTap(job, showSheet: true),
               onDismiss: () {
                 setState(() {
                   _radialMenuPosition = null;
@@ -201,9 +189,11 @@ class _MapFilterScreenState extends State<MapFilterScreen>
       ),
       children: [
         TileLayer(
-          urlTemplate: "https://api.mapbox.com/styles/v1/{id}/tiles/{z}/{x}/{y}?access_token={accessToken}",
+          urlTemplate:
+          "https://api.mapbox.com/styles/v1/{id}/tiles/{z}/{x}/{y}?access_token={accessToken}",
           additionalOptions: const {
-            'accessToken': 'pk.eyJ1IjoiYW5hbmlhczEzIiwiYSI6ImNseDliMjJvYTJoYWcyanF1ZHoybGViYzMifQ.nJ8im-LnmEld5GrEDBaeUQ',
+            'accessToken':
+            'pk.eyJ1IjoiYW5hbmlhczEzIiwiYSI6ImNseDliMjJvYTJoYWcyanF1ZHoybGViYzMifQ.nJ8im-LnmEld5GrEDBaeUQ',
             'id': 'mapbox/streets-v11',
           },
         ),
@@ -242,7 +232,8 @@ class _MapFilterScreenState extends State<MapFilterScreen>
           child: _buildMarkerIcon(job),
         ),
       );
-    }).toList() ?? [];
+    }).toList() ??
+        [];
   }
 
   Widget _buildMarkerIcon(Job job) {
@@ -274,7 +265,8 @@ class _MapFilterScreenState extends State<MapFilterScreen>
   Widget _buildCluster(BuildContext context, List<Marker> markers) {
     final categories = markers
         .map((m) => widget.initialJobs!.firstWhere(
-          (job) => job.latitude == m.point.latitude &&
+          (job) =>
+      job.latitude == m.point.latitude &&
           job.longitude == m.point.longitude,
     ))
         .expand((job) => job.category)

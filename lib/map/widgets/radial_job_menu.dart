@@ -33,7 +33,6 @@ class _RadialJobMenuState extends State<RadialJobMenu> with SingleTickerProvider
       vsync: this,
     );
 
-    // Create animations for each job icon
     final count = widget.jobs.length;
     _animations = List.generate(count, (index) {
       return CurvedAnimation(
@@ -57,62 +56,62 @@ class _RadialJobMenuState extends State<RadialJobMenu> with SingleTickerProvider
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTapDown: (_) => widget.onDismiss(),
-      child: Container(
-        color: Colors.transparent,
-        child: Stack(
-          children: List.generate(widget.jobs.length, (index) {
-            final job = widget.jobs[index];
-            final angle = (2 * pi * index) / widget.jobs.length;
-            const radius = 80.0; // Adjust this value to change the circle size
+    return Container(
+      color: Colors.transparent,
+      child: Stack(
+        children: List.generate(widget.jobs.length, (index) {
+          final job = widget.jobs[index];
+          final angle = (2 * pi * index) / widget.jobs.length;
+          const radius = 80.0;
 
-            return AnimatedBuilder(
-              animation: _animations[index],
-              builder: (context, child) {
-                final progress = _animations[index].value;
-                final x = widget.center.dx + radius * cos(angle) * progress;
-                final y = widget.center.dy + radius * sin(angle) * progress;
+          return AnimatedBuilder(
+            animation: _animations[index],
+            builder: (context, child) {
+              final progress = _animations[index].value;
+              final x = widget.center.dx + radius * cos(angle) * progress;
+              final y = widget.center.dy + radius * sin(angle) * progress;
 
-                return Positioned(
-                  left: x - 20, // Half of the icon size
-                  top: y - 20,  // Half of the icon size
-                  child: GestureDetector(
-                    onTap: () => widget.onJobSelected(job),
-                    child: Container(
-                      width: 40,
-                      height: 40,
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: JobMarkerUtils.getJobColor(job.category),
-                          width: 2,
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.2),
-                            spreadRadius: 2,
-                            blurRadius: 5,
-                            offset: const Offset(0, 2),
-                          ),
-                        ],
+              return Positioned(
+                left: x - 20,
+                top: y - 20,
+                child: GestureDetector(
+                  onTap: () {
+                    print("Radial menu item tapped: ${job.title}");
+                    widget.onJobSelected(job);
+                  },
+                  child: Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: JobMarkerUtils.getJobColor(job.category),
+                        width: 2,
                       ),
-                      child: Tooltip(
-                        message: job.title,
-                        child: Icon(
-                          JobMarkerUtils.getJobIcon(job.category),
-                          color: JobMarkerUtils.getJobColor(job.category),
-                          size: 24,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.2),
+                          spreadRadius: 2,
+                          blurRadius: 5,
+                          offset: const Offset(0, 2),
                         ),
+                      ],
+                    ),
+                    child: Tooltip(
+                      message: job.title,
+                      child: Icon(
+                        JobMarkerUtils.getJobIcon(job.category),
+                        color: JobMarkerUtils.getJobColor(job.category),
+                        size: 24,
                       ),
                     ),
                   ),
-                );
-              },
-            );
-          }),
-        ),
+                ),
+              );
+            },
+          );
+        }),
       ),
     );
   }
