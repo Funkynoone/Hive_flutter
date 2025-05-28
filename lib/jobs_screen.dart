@@ -165,12 +165,22 @@ class _JobsScreenState extends State<JobsScreen> {
   }
 
   Future<List<Job>> _fetchAllJobs() async {
-    final QuerySnapshot querySnapshot =
-    await FirebaseFirestore.instance.collection('JobListings').get();
+    print("Fetching jobs for map...");
+    final QuerySnapshot querySnapshot = await FirebaseFirestore.instance
+        .collection('JobListings')
+        .get();
 
-    return querySnapshot.docs
+    final jobs = querySnapshot.docs
         .map((doc) => Job.fromFirestore(doc.data() as Map<String, dynamic>, doc.id))
         .toList();
+
+    print("Total jobs fetched for map: ${jobs.length}");
+    // Print each job's location to verify uniqueness
+    for (var job in jobs) {
+      print("${job.id}: ${job.latitude}, ${job.longitude}");
+    }
+
+    return jobs;
   }
 
   void _clearFilters() {

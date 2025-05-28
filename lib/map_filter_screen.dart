@@ -32,6 +32,9 @@ class _MapFilterScreenState extends State<MapFilterScreen>
   late AnimationController _animationController;
   late Animation<double> _animation;
 
+  // Group jobs by restaurant and location
+  Map<String, List<Job>> restaurantGroups = {};
+
   @override
   void initState() {
     super.initState();
@@ -43,6 +46,17 @@ class _MapFilterScreenState extends State<MapFilterScreen>
       parent: _animationController,
       curve: Curves.easeInOut,
     );
+    _groupJobsByRestaurant();
+  }
+
+  void _groupJobsByRestaurant() {
+    restaurantGroups.clear();
+    if (widget.initialJobs != null) {
+      for (var job in widget.initialJobs!) {
+        final key = '${job.restaurant}_${job.latitude}_${job.longitude}';
+        restaurantGroups.putIfAbsent(key, () => []).add(job);
+      }
+    }
   }
 
   @override
@@ -94,26 +108,23 @@ class _MapFilterScreenState extends State<MapFilterScreen>
     final jobs = uniqueJobs.values.toList();
     print("Total unique jobs: ${jobs.length}");
 
-    final sameOwner = jobs.every((job) => job.restaurant == jobs.first.restaurant);
-    if (sameOwner) {
-      print("Jobs in cluster: ${jobs.length}");
-      print("Unique jobs restaurant: ${uniqueJobs.values.first.restaurant}");
-      print("All job titles: ${uniqueJobs.values.map((j) => j.title).join(', ')}");
-      if (jobs.length != uniqueJobs.length) {  // Fixed here
-        print("Mismatch in job count vs unique jobs");
-      }
-      final screenPoint = mapController.latLngToScreenPoint(center);
-      if (screenPoint != null) {
-        setState(() {
-          selectedClusterJobs = uniqueJobs.values.toList(); // Use unique jobs only
-          _radialMenuPosition = Offset(screenPoint.x.toDouble(), screenPoint.y.toDouble());
-          selectedJob = null;
-          showClusterDetails = false;
-        });
-      }
+    // Check if all jobs are from the same restaurant
+    final sameOwner = jobs.isNotEmpty &&
+        jobs.every((job) => job.restaurant == jobs.first.restaurant);
+
+    if (sameOwner && jobs.length > 1) {
+      // Show radial menu for same restaurant
+      final screenPoint = const CustomPoint(0.0, 0.0); // We'll calculate this properly
+      setState(() {
+        selectedClusterJobs = jobs;
+        _radialMenuPosition = Offset(center.longitude * 1000, center.latitude * 1000); // Temporary fix
+        selectedJob = null;
+        showClusterDetails = false;
+      });
       return;
     }
 
+    // Zoom in for different restaurants
     final newZoom = MapControllerHelper.calculateOptimalZoom(
       markers,
       mapController.zoom,
@@ -199,7 +210,7 @@ class _MapFilterScreenState extends State<MapFilterScreen>
         ),
         MarkerClusterLayerWidget(
           options: MarkerClusterLayerOptions(
-            maxClusterRadius: 45,
+            maxClusterRadius: 80,
             size: const Size(40, 40),
             markers: _buildMarkers(),
             builder: _buildCluster,
@@ -215,6 +226,11 @@ class _MapFilterScreenState extends State<MapFilterScreen>
               color: Colors.black12,
               borderStrokeWidth: 3,
             ),
+            animationsOptions: const AnimationsOptions(
+              zoom: Duration(milliseconds: 500),
+              centerMarker: Duration(milliseconds: 300),
+              spiderfy: Duration(milliseconds: 300),
+            ),
           ),
         ),
       ],
@@ -222,21 +238,57 @@ class _MapFilterScreenState extends State<MapFilterScreen>
   }
 
   List<Marker> _buildMarkers() {
-    return widget.initialJobs?.map((job) {
-      return Marker(
-        point: LatLng(job.latitude, job.longitude),
-        width: 40,
-        height: 40,
-        builder: (context) => GestureDetector(
-          onTap: () => _handleMarkerTap(job),
-          child: _buildMarkerIcon(job),
+    final List<Marker> markers = [];
+
+    // Create markers for each restaurant group
+    restaurantGroups.forEach((key, jobs) {
+      if (jobs.isEmpty) return;
+
+      final firstJob = jobs.first;
+      final point = LatLng(firstJob.latitude, firstJob.longitude);
+
+      markers.add(
+        Marker(
+          point: point,
+          width: 40,
+          height: 40,
+          builder: (context) => GestureDetector(
+            onTap: () {
+              if (jobs.length == 1) {
+                _handleMarkerTap(firstJob);
+              } else {
+                // Show radial menu for multiple jobs at same location
+                setState(() {
+                  selectedClusterJobs = jobs;
+                  // Calculate screen position
+                  final RenderBox renderBox = context.findRenderObject() as RenderBox;
+                  final position = renderBox.localToGlobal(Offset.zero);
+                  _radialMenuPosition = Offset(
+                    position.dx + 20, // Center of marker
+                    position.dy + 20,
+                  );
+                  selectedJob = null;
+                });
+              }
+            },
+            child: _buildMarkerIcon(jobs),
+          ),
         ),
       );
-    }).toList() ??
-        [];
+    });
+
+    return markers;
   }
 
-  Widget _buildMarkerIcon(Job job) {
+  Widget _buildMarkerIcon(List<Job> jobs) {
+    if (jobs.length == 1) {
+      return _buildSingleJobMarker(jobs.first);
+    } else {
+      return _buildGroupedJobMarker(jobs);
+    }
+  }
+
+  Widget _buildSingleJobMarker(Job job) {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -262,68 +314,92 @@ class _MapFilterScreenState extends State<MapFilterScreen>
     );
   }
 
+  Widget _buildGroupedJobMarker(List<Job> jobs) {
+    final primaryColor = JobMarkerUtils.getJobColor(jobs.first.category);
+
+    return Stack(
+      children: [
+        Container(
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(
+            color: Colors.white,
+            shape: BoxShape.circle,
+            border: Border.all(
+              color: primaryColor,
+              width: 2,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.2),
+                spreadRadius: 2,
+                blurRadius: 5,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Center(
+            child: Text(
+              jobs.length.toString(),
+              style: TextStyle(
+                color: primaryColor,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ),
+        Positioned(
+          right: 0,
+          bottom: 0,
+          child: Container(
+            width: 16,
+            height: 16,
+            decoration: BoxDecoration(
+              color: primaryColor,
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: Colors.white,
+                width: 1,
+              ),
+            ),
+            child: const Center(
+              child: Icon(
+                Icons.restaurant,
+                color: Colors.white,
+                size: 10,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildCluster(BuildContext context, List<Marker> markers) {
-    final categories = markers
-        .map((m) => widget.initialJobs!.firstWhere(
-          (job) =>
-      job.latitude == m.point.latitude &&
-          job.longitude == m.point.longitude,
-    ))
-        .expand((job) => job.category)
-        .toSet();
-
-    final color = categories.length == 1
-        ? JobMarkerUtils.getJobColor(categories.first as List<String>)
-        : Colors.blue;
-
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: Colors.blue.shade600,
         shape: BoxShape.circle,
-        border: Border.all(color: color, width: 2),
+        border: Border.all(
+          color: Colors.white,
+          width: 2,
+        ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.2),
+            color: Colors.blue.withOpacity(0.4),
             spreadRadius: 2,
             blurRadius: 5,
           ),
         ],
       ),
-      child: Stack(
-        children: [
-          Center(
-            child: Text(
-              markers.length.toString(),
-              style: TextStyle(
-                color: color,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
+      child: Center(
+        child: Text(
+          markers.length.toString(),
+          style: const TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
           ),
-          if (categories.length > 1)
-            Positioned(
-              right: 0,
-              bottom: 0,
-              child: Container(
-                padding: const EdgeInsets.all(4),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: color,
-                    width: 1,
-                  ),
-                ),
-                child: Text(
-                  '${categories.length}',
-                  style: TextStyle(
-                    fontSize: 10,
-                    color: color,
-                  ),
-                ),
-              ),
-            ),
-        ],
+        ),
       ),
     );
   }

@@ -24,6 +24,8 @@ class RadialJobMenu extends StatefulWidget {
 class _RadialJobMenuState extends State<RadialJobMenu> with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late List<Animation<double>> _animations;
+  bool _isDisposed = false;
+  bool _isMenuActive = true;
 
   @override
   void initState() {
@@ -32,7 +34,11 @@ class _RadialJobMenuState extends State<RadialJobMenu> with SingleTickerProvider
       duration: const Duration(milliseconds: 300),
       vsync: this,
     );
+    _setupAnimations();
+    _controller.forward();
+  }
 
+  void _setupAnimations() {
     final count = widget.jobs.length;
     _animations = List.generate(count, (index) {
       return CurvedAnimation(
@@ -40,78 +46,101 @@ class _RadialJobMenuState extends State<RadialJobMenu> with SingleTickerProvider
         curve: Interval(
           index / count,
           (index + 1) / count,
-          curve: Curves.easeOut,
+          curve: Curves.easeOutCubic,
         ),
       );
     });
+  }
 
-    _controller.forward();
+  void _handleJobTap(Job job) {
+    if (!_isMenuActive) return;
+
+    setState(() => _isMenuActive = false);
+    _controller.reverse().then((_) {
+      if (!_isDisposed) widget.onJobSelected(job);
+    });
+  }
+
+  @override
+  void didUpdateWidget(RadialJobMenu oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.jobs.length != widget.jobs.length) {
+      _setupAnimations();
+    }
   }
 
   @override
   void dispose() {
+    _isDisposed = true;
     _controller.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      color: Colors.transparent,
-      child: Stack(
-        children: List.generate(widget.jobs.length, (index) {
-          final job = widget.jobs[index];
-          final angle = (2 * pi * index) / widget.jobs.length;
-          const radius = 80.0;
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onTapDown: (_) {
+        if (_isMenuActive) {
+          _controller.reverse().then((_) {
+            if (!_isDisposed) widget.onDismiss();
+          });
+        }
+      },
+      child: Container(
+        color: Colors.transparent,
+        child: Stack(
+          children: List.generate(widget.jobs.length, (index) {
+            final job = widget.jobs[index];
+            final angle = (2 * pi * index) / widget.jobs.length - (pi / 2);
+            const radius = 80.0;
 
-          return AnimatedBuilder(
-            animation: _animations[index],
-            builder: (context, child) {
-              final progress = _animations[index].value;
-              final x = widget.center.dx + radius * cos(angle) * progress;
-              final y = widget.center.dy + radius * sin(angle) * progress;
+            return AnimatedBuilder(
+              animation: _animations[index],
+              builder: (context, child) {
+                final progress = _animations[index].value;
+                final x = widget.center.dx + radius * cos(angle) * progress;
+                final y = widget.center.dy + radius * sin(angle) * progress;
 
-              return Positioned(
-                left: x - 20,
-                top: y - 20,
-                child: GestureDetector(
-                  onTap: () {
-                    print("Radial menu item tapped: ${job.title}");
-                    widget.onJobSelected(job);
-                  },
-                  child: Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: JobMarkerUtils.getJobColor(job.category),
-                        width: 2,
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.2),
-                          spreadRadius: 2,
-                          blurRadius: 5,
-                          offset: const Offset(0, 2),
+                return Positioned(
+                  left: x - 20,
+                  top: y - 20,
+                  child: GestureDetector(
+                    onTap: () => _handleJobTap(job),
+                    child: Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: JobMarkerUtils.getJobColor(job.category),
+                          width: 2,
                         ),
-                      ],
-                    ),
-                    child: Tooltip(
-                      message: job.title,
-                      child: Icon(
-                        JobMarkerUtils.getJobIcon(job.category),
-                        color: JobMarkerUtils.getJobColor(job.category),
-                        size: 24,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.2),
+                            spreadRadius: 2,
+                            blurRadius: 5,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: Tooltip(
+                        message: job.title,
+                        child: Icon(
+                          JobMarkerUtils.getJobIcon(job.category),
+                          color: JobMarkerUtils.getJobColor(job.category),
+                          size: 24,
+                        ),
                       ),
                     ),
                   ),
-                ),
-              );
-            },
-          );
-        }),
+                );
+              },
+            );
+          }),
+        ),
       ),
     );
   }
