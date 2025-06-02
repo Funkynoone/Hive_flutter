@@ -252,7 +252,8 @@ class _MapFilterScreenState extends State<MapFilterScreen>
           point: point,
           width: 40,
           height: 40,
-          builder: (context) => GestureDetector(
+          // FIXED: Changed from 'builder' to 'child'
+          child: GestureDetector(
             onTap: () {
               if (jobs.length == 1) {
                 _handleMarkerTap(firstJob);
@@ -261,12 +262,14 @@ class _MapFilterScreenState extends State<MapFilterScreen>
                 setState(() {
                   selectedClusterJobs = jobs;
                   // Calculate screen position
-                  final RenderBox renderBox = context.findRenderObject() as RenderBox;
-                  final position = renderBox.localToGlobal(Offset.zero);
-                  _radialMenuPosition = Offset(
-                    position.dx + 20, // Center of marker
-                    position.dy + 20,
-                  );
+                  final RenderBox? renderBox = context.findRenderObject() as RenderBox?;
+                  if (renderBox != null) {
+                    final position = renderBox.localToGlobal(Offset.zero);
+                    _radialMenuPosition = Offset(
+                      position.dx + 20, // Center of marker
+                      position.dy + 20,
+                    );
+                  }
                   selectedJob = null;
                 });
               }

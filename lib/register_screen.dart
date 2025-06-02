@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:fluttertoast/fluttertoast.dart';
-import 'package:flutter_google_places/flutter_google_places.dart';
+// REMOVED: import 'package:flutter_google_places/flutter_google_places.dart';
 import 'package:google_maps_webservice/places.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -20,17 +20,24 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
+  final _searchController = TextEditingController();
 
   GoogleMapController? _mapController;
   LatLng _selectedLocation = const LatLng(37.9838, 23.7275); // Athens coordinates
   String _googleMapsApiKey = 'YOUR_API_KEY';
   String? _businessName;
 
+  // For autocomplete
+  List<Prediction> _predictions = [];
+  bool _showPredictions = false;
+  GoogleMapsPlaces? _places;
+
   @override
   void initState() {
     super.initState();
     _googleMapsApiKey = const String.fromEnvironment('MAPS_API_KEY',
         defaultValue: 'AIzaSyBPNJFcuQXSg1m2NU_NWl02SJ15ZOXRJYI');
+    _places = GoogleMapsPlaces(apiKey: _googleMapsApiKey);
   }
 
   @override
@@ -39,6 +46,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     _emailController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
+    _searchController.dispose();
     _mapController?.dispose();
     super.dispose();
   }
@@ -54,53 +62,107 @@ class _RegisterScreenState extends State<RegisterScreen> {
     });
   }
 
-  Future<void> _handlePressButton() async {
-    print('Starting place search...');
-
-    if (_googleMapsApiKey.isEmpty) {
-      print('API key is empty!');
-      Fluttertoast.showToast(msg: "Google Maps API key is missing!");
+  // New method to handle search
+  Future<void> _searchPlaces(String query) async {
+    if (query.isEmpty) {
+      setState(() {
+        _predictions = [];
+        _showPredictions = false;
+      });
       return;
     }
 
     try {
-      setState(() => isLoading = true);
-
-      Prediction? p = await PlacesAutocomplete.show(
-        context: context,
-        apiKey: _googleMapsApiKey,
-        mode: Mode.overlay,
-        language: 'el', // Greek language
-        components: [Component(Component.country, 'gr')], // Greece
+      final response = await _places!.autocomplete(
+        query,
+        language: 'el',
+        components: [Component(Component.country, 'gr')],
+        location: Location(lat: 37.9838, lng: 23.7275),
         types: ['establishment'],
-        strictbounds: false,
-        location: Location(lat: 37.9838, lng: 23.7275), // Athens coordinates
       );
 
-      if (p != null) {
-        await _displayPrediction(p);
+      if (response.isOkay) {
+        setState(() {
+          _predictions = response.predictions;
+          _showPredictions = true;
+        });
       }
     } catch (e) {
-      print('Error in place search: $e');
-      Fluttertoast.showToast(msg: "Error searching: ${e.toString()}");
-    } finally {
-      setState(() => isLoading = false);
+      print('Error searching places: $e');
     }
   }
 
-  Future<void> _displayPrediction(Prediction p) async {
-    print('Processing prediction: ${p.description}');
+  // Replaces the old _handlePressButton method
+  Widget _buildPlaceSearchField() {
+    return Column(
+      children: [
+        TextField(
+          controller: _searchController,
+          decoration: InputDecoration(
+            labelText: 'Search for your business',
+            hintText: 'Type business name...',
+            border: const OutlineInputBorder(),
+            prefixIcon: const Icon(Icons.search),
+            suffixIcon: _searchController.text.isNotEmpty
+                ? IconButton(
+              icon: const Icon(Icons.clear),
+              onPressed: () {
+                setState(() {
+                  _searchController.clear();
+                  _predictions = [];
+                  _showPredictions = false;
+                });
+              },
+            )
+                : null,
+          ),
+          onChanged: (value) {
+            _searchPlaces(value);
+          },
+        ),
+        if (_showPredictions && _predictions.isNotEmpty)
+          Container(
+            constraints: const BoxConstraints(maxHeight: 200),
+            decoration: BoxDecoration(
+              border: Border.all(color: Colors.grey),
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: ListView.builder(
+              shrinkWrap: true,
+              itemCount: _predictions.length,
+              itemBuilder: (context, index) {
+                final prediction = _predictions[index];
+                return ListTile(
+                  leading: const Icon(Icons.location_on),
+                  title: Text(prediction.description ?? ''),
+                  onTap: () => _selectPrediction(prediction),
+                );
+              },
+            ),
+          ),
+      ],
+    );
+  }
 
-    if (p.placeId == null) {
+  // Replaces _displayPrediction
+  Future<void> _selectPrediction(Prediction prediction) async {
+    setState(() {
+      _searchController.text = prediction.description ?? '';
+      _showPredictions = false;
+      isLoading = true;
+    });
+
+    if (prediction.placeId == null) {
       print('No place ID found');
+      setState(() => isLoading = false);
       return;
     }
 
     try {
-      final places = GoogleMapsPlaces(apiKey: _googleMapsApiKey);
-      final PlacesDetailsResponse detail = await places.getDetailsByPlaceId(p.placeId!);
+      final PlacesDetailsResponse detail =
+      await _places!.getDetailsByPlaceId(prediction.placeId!);
 
-      if (detail.status == "OK") {
+      if (detail.status == "OK" && detail.result.geometry != null) {
         final lat = detail.result.geometry!.location.lat;
         final lng = detail.result.geometry!.location.lng;
         final name = detail.result.name;
@@ -127,6 +189,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
     } catch (e) {
       print('Error getting place details: $e');
       Fluttertoast.showToast(msg: "Error: ${e.toString()}");
+    } finally {
+      setState(() => isLoading = false);
     }
   }
 
@@ -249,6 +313,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   onChanged: (value) {
                     setState(() {
                       isBusinessOwner = value;
+                      // Clear search when switching
+                      _searchController.clear();
+                      _predictions = [];
+                      _showPredictions = false;
+                      _businessName = null;
                     });
                   },
                 ),
@@ -296,30 +365,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
             if (isBusinessOwner) ...[
               const SizedBox(height: 20),
-              ElevatedButton(
-                onPressed: isLoading ? null : _handlePressButton,
-                style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                  minimumSize: const Size(double.infinity, 50),
-                ),
-                child: isLoading
-                    ? const SizedBox(
-                  height: 20,
-                  width: 20,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                  ),
-                )
-                    : const Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.search),
-                    SizedBox(width: 8),
-                    Text('Find Your Business'),
-                  ],
-                ),
-              ),
+              // Replace the ElevatedButton with the new search field
+              _buildPlaceSearchField(),
               const SizedBox(height: 16),
               TextField(
                 controller: _emailController,
