@@ -2,7 +2,7 @@ name: hive_flutter
 description: A new Flutter project for Hive restaurant and job seeker application.
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 
-version: 1.0.0+1
+version: 1.0.0+1 # Add a test comment to verify Git push functionality
 
 environment:
   sdk: '>=2.18.0 <3.0.0'
