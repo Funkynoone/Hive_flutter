@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:hive_flutter/profile_screen.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:hive_flutter/jobs_screen.dart';
+import 'package:hive_flutter/jobs_main_screen.dart'; // Changed from jobs_screen.dart
 import 'package:hive_flutter/add_job_screen.dart';
 import 'package:hive_flutter/saved_jobs_screen.dart';
 import 'package:hive_flutter/application_manager_screen.dart';
@@ -46,7 +46,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   void _initializeScreens() {
     List<Widget> screens = [
       const Center(child: Text('Explore Screen')),
-      const JobsScreen(),
+      const JobsMainScreen(), // Changed from JobsScreen()
       const SavedJobsScreen(),
       ProfileScreen(
         onLogout: () async {

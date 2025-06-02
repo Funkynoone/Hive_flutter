@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:hive_flutter/models/job.dart';
 import 'job_card.dart';
-import 'map_filter_screen.dart';
 
 class JobsScreen extends StatefulWidget {
   const JobsScreen({super.key});
@@ -38,127 +37,106 @@ class _JobsScreenState extends State<JobsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        centerTitle: true,
-        title: TextButton(
-          onPressed: () async {
-            final jobs = await _fetchAllJobs(); // Fetch all jobs for map
-            if (mounted) {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => MapFilterScreen(initialJobs: jobs),
-                ),
-              );
-            }
-          },
-          style: TextButton.styleFrom(
-            backgroundColor: const Color(0xFFF4A261),
-            padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 24.0),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(18.0),
-            ),
-          ),
-          child: const Text(
-            'MAP',
-            style: TextStyle(color: Colors.black),
-          ),
-        ),
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('Job Specifications',
-                style: TextStyle(fontSize: 18.0, fontWeight: FontWeight.bold)
-            ),
-            Wrap(
-              spacing: 8.0,
-              children: [
-                filterChip('Service', showService),
-                filterChip('Manager', showManager),
-                filterChip('Cook', showCook),
-                filterChip('Cleaning', showCleaning),
-                filterChip('Delivery', showDelivery),
-                filterChip('Bar', showBar),
-                filterChip('Sommelier', showSommelier),
-              ],
-            ),
-            const SizedBox(height: 20),
-            const Text('Contract Time',
-                style: TextStyle(fontSize: 18.0, fontWeight: FontWeight.bold)
-            ),
-            Wrap(
-              spacing: 8.0,
-              children: [
-                filterChip('Full Time', showFullTime),
-                filterChip('Part Time', showPartTime),
-                filterChip('Season', showSeason),
-              ],
-            ),
-            const SizedBox(height: 20),
-            const Text('Region Filter',
-                style: TextStyle(fontSize: 18.0, fontWeight: FontWeight.bold)
-            ),
-            DropdownButton<String>(
-              isExpanded: true,
-              value: selectedRegion,
-              hint: const Text('Select Region'),
-              onChanged: (String? newValue) {
-                setState(() {
-                  selectedRegion = newValue;
-                });
-              },
-              items: regions.map<DropdownMenuItem<String>>((String value) {
-                return DropdownMenuItem<String>(
-                  value: value,
-                  child: Text(value),
-                );
-              }).toList(),
-            ),
-            const SizedBox(height: 20),
-            Row(
-              children: [
-                Expanded(
-                  child: ElevatedButton(
-                    onPressed: _searchJobs,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.blueAccent,
-                      minimumSize: const Size(double.infinity, 36),
+    // Removed Scaffold since this is now wrapped by JobsMainScreen
+    // Added padding at the top to account for the floating button
+    return Container(
+      color: Colors.white,
+      child: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Add some top padding to avoid overlap with the view switcher button
+              const SizedBox(height: 60),
+
+              const Text('Job Specifications',
+                  style: TextStyle(fontSize: 18.0, fontWeight: FontWeight.bold)
+              ),
+              Wrap(
+                spacing: 8.0,
+                children: [
+                  filterChip('Service', showService),
+                  filterChip('Manager', showManager),
+                  filterChip('Cook', showCook),
+                  filterChip('Cleaning', showCleaning),
+                  filterChip('Delivery', showDelivery),
+                  filterChip('Bar', showBar),
+                  filterChip('Sommelier', showSommelier),
+                ],
+              ),
+              const SizedBox(height: 20),
+              const Text('Contract Time',
+                  style: TextStyle(fontSize: 18.0, fontWeight: FontWeight.bold)
+              ),
+              Wrap(
+                spacing: 8.0,
+                children: [
+                  filterChip('Full Time', showFullTime),
+                  filterChip('Part Time', showPartTime),
+                  filterChip('Season', showSeason),
+                ],
+              ),
+              const SizedBox(height: 20),
+              const Text('Region Filter',
+                  style: TextStyle(fontSize: 18.0, fontWeight: FontWeight.bold)
+              ),
+              DropdownButton<String>(
+                isExpanded: true,
+                value: selectedRegion,
+                hint: const Text('Select Region'),
+                onChanged: (String? newValue) {
+                  setState(() {
+                    selectedRegion = newValue;
+                  });
+                },
+                items: regions.map<DropdownMenuItem<String>>((String value) {
+                  return DropdownMenuItem<String>(
+                    value: value,
+                    child: Text(value),
+                  );
+                }).toList(),
+              ),
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: _searchJobs,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.blueAccent,
+                        minimumSize: const Size(double.infinity, 36),
+                      ),
+                      child: const Text('SEARCH'),
                     ),
-                    child: const Text('SEARCH'),
                   ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: ElevatedButton(
-                    onPressed: _clearFilters,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.white54,
-                      minimumSize: const Size(double.infinity, 36),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: _clearFilters,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.white54,
+                        minimumSize: const Size(double.infinity, 36),
+                      ),
+                      child: const Text('CLEAR FILTERS'),
                     ),
-                    child: const Text('CLEAR FILTERS'),
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 20),
-            _jobs.isNotEmpty
-                ? ListView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: _jobs.length,
-              itemBuilder: (context, index) {
-                final job = _jobs[index];
-                return JobCard(job: job);
-              },
-            )
-                : const Center(child: Text("No jobs found")),
-          ],
+                ],
+              ),
+              const SizedBox(height: 20),
+              _jobs.isNotEmpty
+                  ? ListView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: _jobs.length,
+                itemBuilder: (context, index) {
+                  final job = _jobs[index];
+                  return JobCard(job: job);
+                },
+              )
+                  : const Center(child: Text("No jobs found")),
+            ],
+          ),
         ),
       ),
     );
