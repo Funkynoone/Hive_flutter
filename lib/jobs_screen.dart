@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:hive_flutter/models/job.dart';
+import 'package:hive_flutter/models/job_filter_state.dart';
 import 'job_card.dart';
 
 class JobsScreen extends StatefulWidget {
-  const JobsScreen({super.key});
+  final JobFilterState? filterState;
+
+  const JobsScreen({super.key, this.filterState});
 
   @override
   _JobsScreenState createState() => _JobsScreenState();

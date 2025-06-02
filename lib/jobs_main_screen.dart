@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/jobs_screen.dart';
 import 'package:hive_flutter/map_filter_screen.dart';
+import 'package:hive_flutter/models/job_filter_state.dart';
+import 'package:hive_flutter/widgets/filter_bottom_sheet.dart';
 
 class JobsMainScreen extends StatefulWidget {
   const JobsMainScreen({super.key});
@@ -11,11 +13,20 @@ class JobsMainScreen extends StatefulWidget {
 
 class _JobsMainScreenState extends State<JobsMainScreen> {
   bool _isMapView = true; // Map is now the default view
+  final JobFilterState _filterState = JobFilterState();
+  final DraggableScrollableController _filterSheetController = DraggableScrollableController();
 
   void _toggleView() {
     setState(() {
       _isMapView = !_isMapView;
     });
+  }
+
+  @override
+  void dispose() {
+    _filterState.dispose();
+    _filterSheetController.dispose();
+    super.dispose();
   }
 
   @override
@@ -25,9 +36,16 @@ class _JobsMainScreenState extends State<JobsMainScreen> {
         children: [
           // Main content - either map or list view
           if (_isMapView)
-            const MapFilterScreen()
+            MapFilterScreen(filterState: _filterState)
           else
-            const JobsScreen(),
+            JobsScreen(filterState: _filterState),
+
+          // Filter bottom sheet - only visible in map view
+          if (_isMapView)
+            FilterBottomSheet(
+              filterState: _filterState,
+              controller: _filterSheetController,
+            ),
 
           // Floating button in top right - circular with icon only
           Positioned(

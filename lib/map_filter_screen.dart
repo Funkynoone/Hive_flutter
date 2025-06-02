@@ -3,6 +3,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_map_marker_cluster/flutter_map_marker_cluster.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:hive_flutter/models/job.dart';
+import 'package:hive_flutter/models/job_filter_state.dart';
 import 'map/utils/job_marker_utils.dart';
 import 'map/widgets/job_details_sheet.dart';
 import 'map/widgets/cluster_details_sheet.dart';
@@ -11,8 +12,13 @@ import 'map/widgets/radial_job_menu.dart';
 
 class MapFilterScreen extends StatefulWidget {
   final List<Job>? initialJobs;
+  final JobFilterState? filterState;
 
-  const MapFilterScreen({super.key, this.initialJobs});
+  const MapFilterScreen({
+    super.key,
+    this.initialJobs,
+    this.filterState,
+  });
 
   @override
   _MapFilterScreenState createState() => _MapFilterScreenState();
@@ -34,6 +40,7 @@ class _MapFilterScreenState extends State<MapFilterScreen>
 
   // Group jobs by restaurant and location
   Map<String, List<Job>> restaurantGroups = {};
+  List<Job> filteredJobs = [];
 
   @override
   void initState() {
@@ -46,23 +53,61 @@ class _MapFilterScreenState extends State<MapFilterScreen>
       parent: _animationController,
       curve: Curves.easeInOut,
     );
-    _groupJobsByRestaurant();
-  }
 
-  void _groupJobsByRestaurant() {
-    restaurantGroups.clear();
-    if (widget.initialJobs != null) {
-      for (var job in widget.initialJobs!) {
-        final key = '${job.restaurant}_${job.latitude}_${job.longitude}';
-        restaurantGroups.putIfAbsent(key, () => []).add(job);
-      }
-    }
+    // Initialize with all jobs
+    filteredJobs = widget.initialJobs ?? [];
+    _groupJobsByRestaurant(filteredJobs);
+
+    // Add filter listener
+    widget.filterState?.addListener(_onFiltersChanged);
   }
 
   @override
   void dispose() {
+    widget.filterState?.removeListener(_onFiltersChanged);
     _animationController.dispose();
     super.dispose();
+  }
+
+  void _onFiltersChanged() {
+    // Apply filters when they change
+    _applyFilters();
+  }
+
+  void _applyFilters() {
+    if (widget.filterState == null || widget.initialJobs == null) return;
+
+    List<Job> newFilteredJobs = widget.initialJobs!;
+
+    // Apply job spec filters
+    final activeSpecs = widget.filterState!.activeJobSpecs;
+    if (activeSpecs.isNotEmpty) {
+      newFilteredJobs = newFilteredJobs.where((job) {
+        return job.category.any((cat) => activeSpecs.contains(cat));
+      }).toList();
+    }
+
+    // Apply contract type filters
+    final activeTypes = widget.filterState!.activeContractTypes;
+    if (activeTypes.isNotEmpty) {
+      newFilteredJobs = newFilteredJobs.where((job) {
+        return activeTypes.contains(job.type);
+      }).toList();
+    }
+
+    // Update the map with filtered jobs
+    setState(() {
+      filteredJobs = newFilteredJobs;
+      _groupJobsByRestaurant(filteredJobs);
+    });
+  }
+
+  void _groupJobsByRestaurant(List<Job> jobs) {
+    restaurantGroups.clear();
+    for (var job in jobs) {
+      final key = '${job.restaurant}_${job.latitude}_${job.longitude}';
+      restaurantGroups.putIfAbsent(key, () => []).add(job);
+    }
   }
 
   void _handleMarkerTap(Job job, {bool showSheet = true}) {
@@ -94,7 +139,7 @@ class _MapFilterScreenState extends State<MapFilterScreen>
     final Map<String, Job> uniqueJobs = {};
     for (var marker in markers) {
       print("Checking marker at: ${marker.point}");
-      final jobsAtLocation = widget.initialJobs!.where(
+      final jobsAtLocation = filteredJobs.where(
               (job) => job.latitude == marker.point.latitude &&
               job.longitude == marker.point.longitude
       ).toList();
@@ -252,7 +297,6 @@ class _MapFilterScreenState extends State<MapFilterScreen>
           point: point,
           width: 40,
           height: 40,
-          // FIXED: Changed from 'builder' to 'child'
           child: GestureDetector(
             onTap: () {
               if (jobs.length == 1) {
