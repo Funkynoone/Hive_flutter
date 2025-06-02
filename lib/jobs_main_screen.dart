@@ -29,14 +29,16 @@ class _JobsMainScreenState extends State<JobsMainScreen> {
           else
             const JobsScreen(),
 
-          // Floating button in top right
+          // Floating button in top right - circular with icon only
           Positioned(
-            top: MediaQuery.of(context).padding.top + 10,
+            top: MediaQuery.of(context).padding.top + 60,
             right: 16,
             child: Container(
+              width: 56,
+              height: 56,
               decoration: BoxDecoration(
                 color: Colors.white,
-                borderRadius: BorderRadius.circular(8),
+                shape: BoxShape.circle,
                 boxShadow: [
                   BoxShadow(
                     color: Colors.black.withOpacity(0.1),
@@ -47,27 +49,15 @@ class _JobsMainScreenState extends State<JobsMainScreen> {
               ),
               child: Material(
                 color: Colors.transparent,
+                shape: const CircleBorder(),
                 child: InkWell(
                   onTap: _toggleView,
-                  borderRadius: BorderRadius.circular(8),
-                  child: Padding(
-                    padding: const EdgeInsets.all(12.0),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          _isMapView ? Icons.view_list : Icons.map,
-                          color: Colors.blue,
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          _isMapView ? 'List' : 'Map',
-                          style: const TextStyle(
-                            color: Colors.blue,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ],
+                  customBorder: const CircleBorder(),
+                  child: Center(
+                    child: Icon(
+                      _isMapView ? Icons.view_list : Icons.map,
+                      color: Colors.blue,
+                      size: 24,
                     ),
                   ),
                 ),
