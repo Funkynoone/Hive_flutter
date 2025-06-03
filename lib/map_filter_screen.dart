@@ -2,13 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_map_marker_cluster/flutter_map_marker_cluster.dart';
 import 'package:latlong2/latlong.dart';
-import 'package:hive_flutter/models/job.dart';
-import 'package:hive_flutter/models/job_filter_state.dart';
-import 'map/utils/job_marker_utils.dart';
-import 'map/widgets/job_details_sheet.dart';
-import 'map/widgets/cluster_details_sheet.dart';
-import 'map/controllers/map_controller_helper.dart';
-import 'map/widgets/radial_job_menu.dart';
+import 'package:hive_flutter/models/job.dart'; // Make sure this path is correct
+import 'package:hive_flutter/models/job_filter_state.dart'; // Make sure this path is correct
+import 'map/utils/job_marker_utils.dart'; // Make sure this path is correct
+import 'map/widgets/job_details_sheet.dart'; // Make sure this path is correct
+import 'map/widgets/cluster_details_sheet.dart'; // Make sure this path is correct
+import 'map/controllers/map_controller_helper.dart'; // Make sure this path is correct
+import 'map/widgets/radial_job_menu.dart'; // Make sure this path is correct
 
 class MapFilterScreen extends StatefulWidget {
   final List<Job>? initialJobs;
@@ -54,9 +54,18 @@ class _MapFilterScreenState extends State<MapFilterScreen>
       curve: Curves.easeInOut,
     );
 
+    // DEBUG PRINT: Check initial jobs provided
+    print('MapFilterScreen: Initializing with ${widget.initialJobs?.length ?? 0} jobs.');
+
     // Initialize with all jobs
     filteredJobs = widget.initialJobs ?? [];
+    // DEBUG PRINT: Check filteredJobs count after initState
+    print('MapFilterScreen: After initState, filteredJobs count: ${filteredJobs.length}');
+
     _groupJobsByRestaurant(filteredJobs);
+    // DEBUG PRINT: Check restaurantGroups count after initial grouping
+    print('MapFilterScreen: After initial grouping, restaurantGroups count: ${restaurantGroups.length}');
+
 
     // Add filter listener
     widget.filterState?.addListener(_onFiltersChanged);
@@ -99,12 +108,20 @@ class _MapFilterScreenState extends State<MapFilterScreen>
     setState(() {
       filteredJobs = newFilteredJobs;
       _groupJobsByRestaurant(filteredJobs);
+      // DEBUG PRINT: Check filteredJobs count after applying filters
+      print('MapFilterScreen: After applying filters, filteredJobs count: ${filteredJobs.length}');
+      print('MapFilterScreen: After applying filters and grouping, restaurantGroups count: ${restaurantGroups.length}');
     });
   }
 
   void _groupJobsByRestaurant(List<Job> jobs) {
     restaurantGroups.clear();
     for (var job in jobs) {
+      // Ensure latitude and longitude are valid numbers
+      if (job.latitude == null || job.longitude == null || job.latitude.isNaN || job.longitude.isNaN) {
+        print('MapFilterScreen: Skipping job with invalid coordinates: ${job.title}');
+        continue;
+      }
       final key = '${job.restaurant}_${job.latitude}_${job.longitude}';
       restaurantGroups.putIfAbsent(key, () => []).add(job);
     }
@@ -134,16 +151,20 @@ class _MapFilterScreenState extends State<MapFilterScreen>
   }
 
   void _handleClusterTap(List<Marker> markers, LatLng center) {
-    print("Raw markers: ${markers.length}");
+    print("MapFilterScreen: Raw markers in cluster tap: ${markers.length}");
 
     final Map<String, Job> uniqueJobs = {};
     for (var marker in markers) {
-      print("Checking marker at: ${marker.point}");
+      // Find the job associated with this marker point.
+      // This part might need refinement if your markers don't directly map to single jobs
+      // but are generated from restaurant groups as done in _buildMarkers.
+      // A more robust way might be to store job IDs directly in the marker's properties if possible,
+      // or to ensure the LatLng lookup is accurate.
       final jobsAtLocation = filteredJobs.where(
               (job) => job.latitude == marker.point.latitude &&
               job.longitude == marker.point.longitude
       ).toList();
-      print("Found ${jobsAtLocation.length} jobs at location");
+      print("MapFilterScreen: Found ${jobsAtLocation.length} jobs at marker point: ${marker.point}");
 
       for (var job in jobsAtLocation) {
         uniqueJobs[job.id] = job;
@@ -151,7 +172,7 @@ class _MapFilterScreenState extends State<MapFilterScreen>
     }
 
     final jobs = uniqueJobs.values.toList();
-    print("Total unique jobs: ${jobs.length}");
+    print("MapFilterScreen: Total unique jobs in cluster: ${jobs.length}");
 
     // Check if all jobs are from the same restaurant
     final sameOwner = jobs.isNotEmpty &&
@@ -159,12 +180,16 @@ class _MapFilterScreenState extends State<MapFilterScreen>
 
     if (sameOwner && jobs.length > 1) {
       // Show radial menu for same restaurant
-      final screenPoint = const CustomPoint(0.0, 0.0); // We'll calculate this properly
+      // NOTE: _radialMenuPosition calculation here is conceptual and needs to be a screen offset.
+      // The current calculation (center.longitude * 1000) is incorrect for screen coordinates.
+      // You'll need to use mapController.latLngToScreenPoint for accurate positioning.
+      final screenPoint = mapController.latLngToScreenPoint(center);
       setState(() {
         selectedClusterJobs = jobs;
-        _radialMenuPosition = Offset(center.longitude * 1000, center.latitude * 1000); // Temporary fix
+        _radialMenuPosition = Offset(screenPoint.x.toDouble(), screenPoint.y.toDouble());
         selectedJob = null;
         showClusterDetails = false;
+        print("MapFilterScreen: Showing radial menu for cluster at $center");
       });
       return;
     }
@@ -182,13 +207,16 @@ class _MapFilterScreenState extends State<MapFilterScreen>
         showClusterDetails = true;
         isFullDetails = false;
         _animationController.forward(from: 0.0);
+        print("MapFilterScreen: Showing cluster details sheet for cluster at $center");
       });
     } else {
       mapController.move(center, newZoom);
+      print("MapFilterScreen: Zooming to cluster center: $center with zoom: $newZoom");
     }
   }
 
   void _handleMapTap(TapPosition tapPosition, LatLng point) {
+    print("MapFilterScreen: Map tapped at $point");
     setState(() {
       selectedJob = null;
       selectedClusterJobs = null;
@@ -218,6 +246,7 @@ class _MapFilterScreenState extends State<MapFilterScreen>
           if (_radialMenuPosition != null && selectedClusterJobs != null)
             RadialJobMenu(
               jobs: selectedClusterJobs!,
+              // NOTE: This center is a screen coordinate, adjust RadialJobMenu if it expects LatLng
               center: _radialMenuPosition!,
               onJobSelected: (job) => _handleMarkerTap(job, showSheet: true),
               onDismiss: () {
@@ -248,6 +277,7 @@ class _MapFilterScreenState extends State<MapFilterScreen>
           urlTemplate:
           "https://api.mapbox.com/styles/v1/{id}/tiles/{z}/{x}/{y}?access_token={accessToken}",
           additionalOptions: const {
+            // Replace with your actual Mapbox Access Token
             'accessToken':
             'pk.eyJ1IjoiYW5hbmlhczEzIiwiYSI6ImNseDliMjJvYTJoYWcyanF1ZHoybGViYzMifQ.nJ8im-LnmEld5GrEDBaeUQ',
             'id': 'mapbox/streets-v11',
@@ -257,7 +287,7 @@ class _MapFilterScreenState extends State<MapFilterScreen>
           options: MarkerClusterLayerOptions(
             maxClusterRadius: 80,
             size: const Size(40, 40),
-            markers: _buildMarkers(),
+            markers: _buildMarkers(), // This calls the marker builder
             builder: _buildCluster,
             onClusterTap: (cluster) {
               final centerPoint = LatLng(
@@ -285,11 +315,26 @@ class _MapFilterScreenState extends State<MapFilterScreen>
   List<Marker> _buildMarkers() {
     final List<Marker> markers = [];
 
+    // DEBUG PRINT: Confirm _buildMarkers is actively building
+    print('MapFilterScreen: _buildMarkers function called. restaurantGroups count: ${restaurantGroups.length}');
+
     // Create markers for each restaurant group
     restaurantGroups.forEach((key, jobs) {
-      if (jobs.isEmpty) return;
+      if (jobs.isEmpty) {
+        print('MapFilterScreen: Encountered empty job list for group key: $key');
+        return;
+      }
 
       final firstJob = jobs.first;
+      // DEBUG PRINT: Check job coordinates
+      print('MapFilterScreen: Processing job group for ${firstJob.restaurant} at Lat: ${firstJob.latitude}, Lng: ${firstJob.longitude}');
+
+      // Ensure valid coordinates before creating LatLng
+      if (firstJob.latitude == null || firstJob.longitude == null || firstJob.latitude.isNaN || firstJob.longitude.isNaN) {
+        print('MapFilterScreen: Invalid coordinates for job: ${firstJob.title}. Skipping marker creation.');
+        return;
+      }
+
       final point = LatLng(firstJob.latitude, firstJob.longitude);
 
       markers.add(
@@ -299,31 +344,44 @@ class _MapFilterScreenState extends State<MapFilterScreen>
           height: 40,
           child: GestureDetector(
             onTap: () {
+              print('MapFilterScreen: Marker tapped for job: ${firstJob.title}');
               if (jobs.length == 1) {
                 _handleMarkerTap(firstJob);
               } else {
                 // Show radial menu for multiple jobs at same location
                 setState(() {
                   selectedClusterJobs = jobs;
-                  // Calculate screen position
-                  final RenderBox? renderBox = context.findRenderObject() as RenderBox?;
-                  if (renderBox != null) {
-                    final position = renderBox.localToGlobal(Offset.zero);
-                    _radialMenuPosition = Offset(
-                      position.dx + 20, // Center of marker
-                      position.dy + 20,
-                    );
-                  }
+                  // Get the screen point of the tapped marker
+                  final screenPoint = mapController.latLngToScreenPoint(point);
+                  _radialMenuPosition = Offset(screenPoint.x.toDouble(), screenPoint.y.toDouble());
                   selectedJob = null;
+                  print('MapFilterScreen: Showing radial menu for ${jobs.length} jobs at tapped marker.');
                 });
               }
             },
+            // Temporary Test for Marker Visibility:
+            // Uncomment the block below and comment out `child: _buildMarkerIcon(jobs),`
+            /*
+            child: Container(
+              width: 40,
+              height: 40,
+              color: Colors.red.withOpacity(0.7), // Make it very obvious
+              child: Center(
+                child: Text(
+                  jobs.length == 1 ? 'S' : '${jobs.length}', // S for single, number for grouped
+                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ),
+            */
+            // Original marker icon builder:
             child: _buildMarkerIcon(jobs),
           ),
         ),
       );
     });
-
+    // DEBUG PRINT: Total markers built
+    print('MapFilterScreen: _buildMarkers function completed. Total markers added: ${markers.length}');
     return markers;
   }
 
@@ -336,12 +394,29 @@ class _MapFilterScreenState extends State<MapFilterScreen>
   }
 
   Widget _buildSingleJobMarker(Job job) {
+    // DEBUG PRINT: Building single job marker for ${job.title}
+    print('MapFilterScreen: Building single job marker for ${job.title}');
+    final color = JobMarkerUtils.getJobColor(job.category);
+    final icon = JobMarkerUtils.getJobIcon(job.category);
+
+    if (color == null || icon == null) {
+      print('MapFilterScreen: Warning! JobMarkerUtils returned null color or icon for job: ${job.title}, category: ${job.category}. Defaulting to generic marker.');
+      return Container( // Fallback generic marker
+        decoration: BoxDecoration(
+          color: Colors.grey,
+          shape: BoxShape.circle,
+          border: Border.all(color: Colors.black, width: 2),
+        ),
+        child: const Icon(Icons.help_outline, color: Colors.white, size: 24),
+      );
+    }
+
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
         shape: BoxShape.circle,
         border: Border.all(
-          color: JobMarkerUtils.getJobColor(job.category),
+          color: color,
           width: 2,
         ),
         boxShadow: [
@@ -354,15 +429,32 @@ class _MapFilterScreenState extends State<MapFilterScreen>
         ],
       ),
       child: Icon(
-        JobMarkerUtils.getJobIcon(job.category),
-        color: JobMarkerUtils.getJobColor(job.category),
+        icon,
+        color: color,
         size: 24,
       ),
     );
   }
 
   Widget _buildGroupedJobMarker(List<Job> jobs) {
+    // DEBUG PRINT: Building grouped job marker for ${jobs.length} jobs
+    print('MapFilterScreen: Building grouped job marker for ${jobs.length} jobs');
+
     final primaryColor = JobMarkerUtils.getJobColor(jobs.first.category);
+
+    if (primaryColor == null) {
+      print('MapFilterScreen: Warning! JobMarkerUtils returned null primary color for grouped marker. Defaulting to grey.');
+      return Container( // Fallback generic marker
+        width: 40,
+        height: 40,
+        decoration: BoxDecoration(
+          color: Colors.grey,
+          shape: BoxShape.circle,
+          border: Border.all(color: Colors.black, width: 2),
+        ),
+        child: Center(child: Text(jobs.length.toString(), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
+      );
+    }
 
     return Stack(
       children: [
@@ -411,7 +503,7 @@ class _MapFilterScreenState extends State<MapFilterScreen>
             ),
             child: const Center(
               child: Icon(
-                Icons.restaurant,
+                Icons.restaurant, // Consider making this dynamic based on primary category
                 color: Colors.white,
                 size: 10,
               ),
@@ -423,6 +515,8 @@ class _MapFilterScreenState extends State<MapFilterScreen>
   }
 
   Widget _buildCluster(BuildContext context, List<Marker> markers) {
+    // DEBUG PRINT: Building cluster icon for ${markers.length} markers
+    print('MapFilterScreen: Building cluster icon for ${markers.length} markers');
     return Container(
       decoration: BoxDecoration(
         color: Colors.blue.shade600,
