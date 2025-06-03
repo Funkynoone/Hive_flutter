@@ -7,7 +7,7 @@ class MapControllerHelper {
   static const double MAX_ZOOM = 18.0;
   static const double INITIAL_ZOOM = 6.0;
   static const double CLUSTER_ZOOM_INCREMENT = 1.5;
-  static final LatLng DEFAULT_CENTER = LatLng(37.9838, 23.7275);
+  static const LatLng DEFAULT_CENTER = LatLng(37.9838, 23.7275);
 
   static double calculateOptimalZoom(List<Marker> markers, double currentZoom) {
     if (markers.length <= 1) return currentZoom;

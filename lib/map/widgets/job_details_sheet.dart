@@ -9,11 +9,11 @@ class JobDetailsSheet extends StatefulWidget {
   final Function(bool) setSending;
 
   const JobDetailsSheet({
-    Key? key,
+    super.key,
     required this.job,
     required this.setUploading,
     required this.setSending,
-  }) : super(key: key);
+  });
 
   @override
   State<JobDetailsSheet> createState() => _JobDetailsSheetState();
