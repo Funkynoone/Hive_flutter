@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart'; // Import Firestore
 import 'package:hive_flutter/jobs_screen.dart';
 import 'package:hive_flutter/map_filter_screen.dart';
 import 'package:hive_flutter/models/job_filter_state.dart';
+import 'package:hive_flutter/models/job.dart'; // Import your Job model
 
 class JobsMainScreen extends StatefulWidget {
   const JobsMainScreen({super.key});
@@ -14,6 +16,50 @@ class _JobsMainScreenState extends State<JobsMainScreen> {
   bool _isMapView = true; // Map is now the default view
   bool _showFilters = false;
   final JobFilterState _filterState = JobFilterState();
+  late Future<List<Job>> _jobsFuture; // Future to hold fetched jobs
+
+  @override
+  void initState() {
+    super.initState();
+    // Initialize the future to fetch jobs when the screen starts
+    _jobsFuture = _fetchJobsFromFirestore();
+
+    // Listen to filter changes
+    _filterState.addListener(() {
+      setState(() {
+        // This will rebuild the UI when filters change,
+        // which will cause MapFilterScreen and JobsScreen to re-evaluate their filters
+      });
+    });
+  }
+
+  // New method to fetch jobs from Firestore
+  Future<List<Job>> _fetchJobsFromFirestore() async {
+    try {
+      print('JobsMainScreen: Starting to fetch jobs from Firestore...');
+      final QuerySnapshot snapshot = await FirebaseFirestore.instance
+          .collection('JobListings') // Use 'JobListings' as confirmed
+          .get();
+
+      final List<Job> jobs = snapshot.docs
+          .map((doc) => Job.fromFirestore(doc.data() as Map<String, dynamic>, doc.id))
+          .toList();
+
+      print('JobsMainScreen: Successfully fetched ${jobs.length} jobs from Firestore.');
+      return jobs;
+    } catch (e) {
+      print('JobsMainScreen: Error fetching jobs: $e');
+      // Return an empty list on error to prevent app crash
+      return [];
+    }
+  }
+
+  @override
+  void dispose() {
+    _filterState.removeListener(() {}); // Remove listener before disposing
+    _filterState.dispose(); // Dispose the ChangeNotifier
+    super.dispose();
+  }
 
   void _toggleView() {
     setState(() {
@@ -29,24 +75,6 @@ class _JobsMainScreenState extends State<JobsMainScreen> {
   }
 
   @override
-  void initState() {
-    super.initState();
-    // Listen to filter changes
-    _filterState.addListener(() {
-      setState(() {
-        // This will rebuild the UI when filters change
-      });
-    });
-  }
-
-  @override
-  void dispose() {
-    _filterState.removeListener(() {});
-    _filterState.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: GestureDetector(
@@ -59,12 +87,35 @@ class _JobsMainScreenState extends State<JobsMainScreen> {
         },
         child: Stack(
           children: [
-            // Main content - either map or list view
-            if (_isMapView)
-              MapFilterScreen(filterState: _filterState)
-            else
-              JobsScreen(filterState: _filterState),
-            
+            // Use FutureBuilder to wait for jobs to load
+            FutureBuilder<List<Job>>(
+              future: _jobsFuture,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                } else if (snapshot.hasError) {
+                  print('JobsMainScreen: FutureBuilder error: ${snapshot.error}');
+                  return Center(child: Text('Error loading jobs: ${snapshot.error}'));
+                } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                  print('JobsMainScreen: No job data found in snapshot.');
+                  return const Center(child: Text('No job listings available.'));
+                } else {
+                  // Data is available, pass it to both screens
+                  final List<Job> availableJobs = snapshot.data!;
+                  print('JobsMainScreen: Rendering view with ${availableJobs.length} jobs.');
+                  return _isMapView
+                      ? MapFilterScreen(
+                    initialJobs: availableJobs, // Pass the fetched jobs here
+                    filterState: _filterState,
+                  )
+                      : JobsScreen(
+                    initialJobs: availableJobs, // Also pass to JobsScreen if it needs it
+                    filterState: _filterState,
+                  );
+                }
+              },
+            ),
+
             // Filter button in top left - only visible in map view
             if (_isMapView)
               Positioned(
@@ -130,7 +181,7 @@ class _JobsMainScreenState extends State<JobsMainScreen> {
                   ),
                 ),
               ),
-            
+
             // Filter panel - transparent dropdown style
             if (_isMapView && _showFilters)
               Positioned(
@@ -188,7 +239,7 @@ class _JobsMainScreenState extends State<JobsMainScreen> {
                             ],
                           ),
                           const SizedBox(height: 12),
-                          
+
                           // Job Specifications
                           const Text(
                             'Job Type',
@@ -206,11 +257,11 @@ class _JobsMainScreenState extends State<JobsMainScreen> {
                           _buildJobFilterItem(Icons.delivery_dining, 'Delivery', _filterState.showDelivery),
                           _buildJobFilterItem(Icons.local_bar, 'Bar', _filterState.showBar),
                           _buildJobFilterItem(Icons.wine_bar, 'Sommelier', _filterState.showSommelier),
-                          
+
                           const SizedBox(height: 16),
                           const Divider(height: 1),
                           const SizedBox(height: 16),
-                          
+
                           // Contract Time
                           const Text(
                             'Contract Time',
@@ -230,7 +281,7 @@ class _JobsMainScreenState extends State<JobsMainScreen> {
                   ),
                 ),
               ),
-            
+
             // View toggle button in top right - circular with icon only
             Positioned(
               top: MediaQuery.of(context).padding.top + 60,

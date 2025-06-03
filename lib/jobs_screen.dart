@@ -6,23 +6,52 @@ import 'job_card.dart';
 
 class JobsScreen extends StatefulWidget {
   final JobFilterState? filterState;
+  final List<Job>? initialJobs; // <--- ADDED THIS PARAMETER
 
-  const JobsScreen({super.key, this.filterState});
+  const JobsScreen({
+    super.key,
+    this.filterState,
+    this.initialJobs, // <--- ADDED THIS TO THE CONSTRUCTOR
+  });
 
   @override
   _JobsScreenState createState() => _JobsScreenState();
 }
 
 class _JobsScreenState extends State<JobsScreen> {
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  // Removed _firestore here, as data will now come from initialJobs
+  // final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   bool _showFilters = false;
+
+  // Internal list to hold jobs, either initial or filtered
+  List<Job> _jobs = [];
 
   @override
   void initState() {
     super.initState();
+    // Initialize _jobs with initialJobs provided
+    _jobs = widget.initialJobs ?? [];
+    _applyFilters(); // Apply filters initially if any are active
+
     // Listen to filter changes
     widget.filterState?.addListener(_onFiltersChanged);
   }
+
+  @override
+  void didUpdateWidget(covariant JobsScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // If initialJobs changes (e.g., parent fetches new data), update our internal list
+    if (widget.initialJobs != oldWidget.initialJobs) {
+      _jobs = widget.initialJobs ?? [];
+      _applyFilters(); // Re-apply filters with new initial data
+    }
+    // If filterState changes, or its listener wasn't set up correctly before
+    if (widget.filterState != oldWidget.filterState) {
+      oldWidget.filterState?.removeListener(_onFiltersChanged);
+      widget.filterState?.addListener(_onFiltersChanged);
+    }
+  }
+
 
   @override
   void dispose() {
@@ -32,7 +61,7 @@ class _JobsScreenState extends State<JobsScreen> {
 
   void _onFiltersChanged() {
     setState(() {
-      // Rebuild when filters change
+      _applyFilters(); // Re-apply filters when filter state changes
     });
   }
 
@@ -41,6 +70,35 @@ class _JobsScreenState extends State<JobsScreen> {
       _showFilters = !_showFilters;
     });
   }
+
+  // Moved filtering logic into a separate method
+  void _applyFilters() {
+    List<Job> tempJobs = widget.initialJobs ?? []; // Start with the raw initial jobs
+
+    if (widget.filterState == null) {
+      _jobs = tempJobs; // No filters, show all initial jobs
+      return;
+    }
+
+    // Apply job spec filters
+    final activeSpecs = widget.filterState!.activeJobSpecs;
+    if (activeSpecs.isNotEmpty) {
+      tempJobs = tempJobs.where((job) {
+        return job.category.any((cat) => activeSpecs.contains(cat));
+      }).toList();
+    }
+
+    // Apply contract type filters
+    final activeTypes = widget.filterState!.activeContractTypes;
+    if (activeTypes.isNotEmpty) {
+      tempJobs = tempJobs.where((job) {
+        return activeTypes.contains(job.type);
+      }).toList();
+    }
+
+    _jobs = tempJobs; // Update the internal list with filtered results
+  }
+
 
   @override
   Widget build(BuildContext context) {
@@ -68,42 +126,54 @@ class _JobsScreenState extends State<JobsScreen> {
             // Main job list
             Container(
               color: Colors.grey[100],
-              child: StreamBuilder<QuerySnapshot>(
-                stream: _firestore.collection('JobListings').snapshots(),
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const Center(child: CircularProgressIndicator());
-                  }
+              // StreamBuilder is no longer needed here as data comes from initialJobs
+              // StreamBuilder<QuerySnapshot>(
+              //   stream: _firestore.collection('JobListings').snapshots(), // Changed to JobListings
+              //   builder: (context, snapshot) {
+              //     if (snapshot.connectionState == ConnectionState.waiting) {
+              //       return const Center(child: CircularProgressIndicator());
+              //     }
 
-                  if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                    return const Center(child: Text('No jobs available'));
-                  }
+              //     if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+              //       return const Center(child: Text('No jobs available'));
+              //     }
 
-                  // Corrected: Pass both data and ID to Job.fromFirestore
-                  List<Job> jobs = snapshot.data!.docs
-                      .map((doc) => Job.fromFirestore(doc.data() as Map<String, dynamic>, doc.id))
-                      .toList();
+              //     List<Job> jobs = snapshot.data!.docs
+              //         .map((doc) => Job.fromFirestore(doc.data() as Map<String, dynamic>, doc.id))
+              //         .toList();
 
-                  // Apply filters if they exist
-                  if (widget.filterState != null) {
-                    jobs = _applyFilters(jobs);
-                  }
+              //     // Apply filters if they exist
+              //     if (widget.filterState != null) {
+              //       jobs = _applyFilters(jobs);
+              //     }
 
-                  if (jobs.isEmpty) {
-                    return const Center(
-                      child: Text('No jobs match your filters'),
-                    );
-                  }
+              //     if (jobs.isEmpty) {
+              //       return const Center(
+              //         child: Text('No jobs match your filters'),
+              //       );
+              //     }
 
-                  return ListView.builder(
-                    padding: const EdgeInsets.all(16),
-                    itemCount: jobs.length,
-                    itemBuilder: (context, index) {
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 16),
-                        child: JobCard(job: jobs[index]),
-                      );
-                    },
+              //     return ListView.builder(
+              //       padding: const EdgeInsets.all(16),
+              //       itemCount: jobs.length,
+              //       itemBuilder: (context, index) {
+              //         return Padding(
+              //           padding: const EdgeInsets.only(bottom: 16),
+              //           child: JobCard(job: jobs[index]),
+              //         );
+              //       },
+              //     );
+              //   },
+              // ),
+              child: _jobs.isEmpty
+                  ? const Center(child: Text('No jobs match your filters or no jobs available.'))
+                  : ListView.builder(
+                padding: const EdgeInsets.all(16),
+                itemCount: _jobs.length,
+                itemBuilder: (context, index) {
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 16),
+                    child: JobCard(job: _jobs[index]),
                   );
                 },
               ),
@@ -279,27 +349,10 @@ class _JobsScreenState extends State<JobsScreen> {
     );
   }
 
-  List<Job> _applyFilters(List<Job> jobs) {
-    if (widget.filterState == null) return jobs;
-
-    // Apply job spec filters
-    final activeSpecs = widget.filterState!.activeJobSpecs;
-    if (activeSpecs.isNotEmpty) {
-      jobs = jobs.where((job) {
-        return job.category.any((cat) => activeSpecs.contains(cat));
-      }).toList();
-    }
-
-    // Apply contract type filters
-    final activeTypes = widget.filterState!.activeContractTypes;
-    if (activeTypes.isNotEmpty) {
-      jobs = jobs.where((job) {
-        return activeTypes.contains(job.type);
-      }).toList();
-    }
-
-    return jobs;
-  }
+  // This method is now internal to JobsScreen and updates _jobs
+  // List<Job> _applyFilters(List<Job> jobs) { // Old signature
+  //   ...
+  // }
 
   Widget _buildJobFilterItem(IconData icon, String label, bool isSelected) {
     return InkWell(
