@@ -14,268 +14,366 @@ class JobsScreen extends StatefulWidget {
 }
 
 class _JobsScreenState extends State<JobsScreen> {
-  bool showFullTime = false;
-  bool showPartTime = false;
-  bool showSeason = false;
-  bool showService = false;
-  bool showManager = false;
-  bool showBar = false;
-  bool showDelivery = false;
-  bool showSommelier = false;
-  bool showCleaning = false;
-  bool showCook = false;
-  String? selectedRegion;
-  List<Job> _jobs = [];
-
-  final List<String> regions = [
-    'Attica', 'Sterea Ellada', 'Peloponnisus', 'Epirus', 'Thessalia',
-    'Thraki', 'Ionian islands', 'Aegean islands', 'Creta'
-  ];
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  bool _showFilters = false;
 
   @override
   void initState() {
     super.initState();
-    _searchJobs(); // Load jobs initially
+    // Listen to filter changes
+    widget.filterState?.addListener(_onFiltersChanged);
+  }
+
+  @override
+  void dispose() {
+    widget.filterState?.removeListener(_onFiltersChanged);
+    super.dispose();
+  }
+
+  void _onFiltersChanged() {
+    setState(() {
+      // Rebuild when filters change
+    });
+  }
+
+  void _toggleFilters() {
+    setState(() {
+      _showFilters = !_showFilters;
+    });
   }
 
   @override
   Widget build(BuildContext context) {
-    // Removed Scaffold since this is now wrapped by JobsMainScreen
-    // Added padding at the top to account for the floating button
-    return Container(
-      color: Colors.white,
-      child: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Add some top padding to avoid overlap with the view switcher button
-              const SizedBox(height: 60),
+    return Scaffold(
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 0,
+        leading: const SizedBox(), // Remove default back button
+        title: const Text(
+          'Jobs',
+          style: TextStyle(color: Colors.black),
+        ),
+        centerTitle: true,
+      ),
+      body: GestureDetector(
+        onTap: () {
+          if (_showFilters) {
+            setState(() {
+              _showFilters = false;
+            });
+          }
+        },
+        child: Stack(
+          children: [
+            // Main job list
+            Container(
+              color: Colors.grey[100],
+              child: StreamBuilder<QuerySnapshot>(
+                stream: _firestore.collection('JobListings').snapshots(),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
 
-              const Text('Job Specifications',
-                  style: TextStyle(fontSize: 18.0, fontWeight: FontWeight.bold)
-              ),
-              Wrap(
-                spacing: 8.0,
-                children: [
-                  filterChip('Service', showService),
-                  filterChip('Manager', showManager),
-                  filterChip('Cook', showCook),
-                  filterChip('Cleaning', showCleaning),
-                  filterChip('Delivery', showDelivery),
-                  filterChip('Bar', showBar),
-                  filterChip('Sommelier', showSommelier),
-                ],
-              ),
-              const SizedBox(height: 20),
-              const Text('Contract Time',
-                  style: TextStyle(fontSize: 18.0, fontWeight: FontWeight.bold)
-              ),
-              Wrap(
-                spacing: 8.0,
-                children: [
-                  filterChip('Full Time', showFullTime),
-                  filterChip('Part Time', showPartTime),
-                  filterChip('Season', showSeason),
-                ],
-              ),
-              const SizedBox(height: 20),
-              const Text('Region Filter',
-                  style: TextStyle(fontSize: 18.0, fontWeight: FontWeight.bold)
-              ),
-              DropdownButton<String>(
-                isExpanded: true,
-                value: selectedRegion,
-                hint: const Text('Select Region'),
-                onChanged: (String? newValue) {
-                  setState(() {
-                    selectedRegion = newValue;
-                  });
-                },
-                items: regions.map<DropdownMenuItem<String>>((String value) {
-                  return DropdownMenuItem<String>(
-                    value: value,
-                    child: Text(value),
+                  if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                    return const Center(child: Text('No jobs available'));
+                  }
+
+                  // Corrected: Pass both data and ID to Job.fromFirestore
+                  List<Job> jobs = snapshot.data!.docs
+                      .map((doc) => Job.fromFirestore(doc.data() as Map<String, dynamic>, doc.id))
+                      .toList();
+
+                  // Apply filters if they exist
+                  if (widget.filterState != null) {
+                    jobs = _applyFilters(jobs);
+                  }
+
+                  if (jobs.isEmpty) {
+                    return const Center(
+                      child: Text('No jobs match your filters'),
+                    );
+                  }
+
+                  return ListView.builder(
+                    padding: const EdgeInsets.all(16),
+                    itemCount: jobs.length,
+                    itemBuilder: (context, index) {
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 16),
+                        child: JobCard(job: jobs[index]),
+                      );
+                    },
                   );
-                }).toList(),
-              ),
-              const SizedBox(height: 20),
-              Row(
-                children: [
-                  Expanded(
-                    child: ElevatedButton(
-                      onPressed: _searchJobs,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.blueAccent,
-                        minimumSize: const Size(double.infinity, 36),
-                      ),
-                      child: const Text('SEARCH'),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: ElevatedButton(
-                      onPressed: _clearFilters,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.white54,
-                        minimumSize: const Size(double.infinity, 36),
-                      ),
-                      child: const Text('CLEAR FILTERS'),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 20),
-              _jobs.isNotEmpty
-                  ? ListView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                itemCount: _jobs.length,
-                itemBuilder: (context, index) {
-                  final job = _jobs[index];
-                  return JobCard(job: job);
                 },
-              )
-                  : const Center(child: Text("No jobs found")),
-            ],
-          ),
+              ),
+            ),
+
+            // Filter button
+            Positioned(
+              top: 16,
+              left: 16,
+              child: Container(
+                width: 56,
+                height: 56,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.1),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Material(
+                  color: Colors.transparent,
+                  shape: const CircleBorder(),
+                  child: InkWell(
+                    onTap: _toggleFilters,
+                    customBorder: const CircleBorder(),
+                    child: Center(
+                      child: Stack(
+                        children: [
+                          Icon(
+                            Icons.filter_list,
+                            color: _showFilters ? Colors.blue : Colors.grey[700],
+                            size: 24,
+                          ),
+                          if (widget.filterState != null && widget.filterState!.activeFilterCount > 0)
+                            Positioned(
+                              right: -2,
+                              top: -2,
+                              child: Container(
+                                padding: const EdgeInsets.all(4),
+                                decoration: const BoxDecoration(
+                                  color: Colors.red,
+                                  shape: BoxShape.circle,
+                                ),
+                                constraints: const BoxConstraints(
+                                  minWidth: 16,
+                                  minHeight: 16,
+                                ),
+                                child: Text(
+                                  '${widget.filterState!.activeFilterCount}',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                  textAlign: TextAlign.center,
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+
+            // Filter panel
+            if (_showFilters && widget.filterState != null)
+              Positioned(
+                top: 88,
+                left: 16,
+                right: MediaQuery.of(context).size.width * 0.3,
+                child: GestureDetector(
+                  onTap: () {}, // Prevent closing when tapping inside
+                  child: Container(
+                    constraints: BoxConstraints(
+                      maxHeight: MediaQuery.of(context).size.height * 0.6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.95),
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.15),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          // Header
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Text(
+                                'Filters',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              if (widget.filterState!.activeFilterCount > 0)
+                                TextButton(
+                                  onPressed: () {
+                                    widget.filterState!.clearAll();
+                                  },
+                                  style: TextButton.styleFrom(
+                                    padding: EdgeInsets.zero,
+                                    minimumSize: const Size(50, 30),
+                                  ),
+                                  child: const Text(
+                                    'Clear',
+                                    style: TextStyle(fontSize: 12),
+                                  ),
+                                ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+
+                          // Job Specifications
+                          const Text(
+                            'Job Type',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.grey,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          _buildJobFilterItem(Icons.room_service, 'Service', widget.filterState!.showService),
+                          _buildJobFilterItem(Icons.manage_accounts, 'Manager', widget.filterState!.showManager),
+                          _buildJobFilterItem(Icons.restaurant, 'Cook', widget.filterState!.showCook),
+                          _buildJobFilterItem(Icons.cleaning_services, 'Cleaning', widget.filterState!.showCleaning),
+                          _buildJobFilterItem(Icons.delivery_dining, 'Delivery', widget.filterState!.showDelivery),
+                          _buildJobFilterItem(Icons.local_bar, 'Bar', widget.filterState!.showBar),
+                          _buildJobFilterItem(Icons.wine_bar, 'Sommelier', widget.filterState!.showSommelier),
+
+                          const SizedBox(height: 16),
+                          const Divider(height: 1),
+                          const SizedBox(height: 16),
+
+                          // Contract Time
+                          const Text(
+                            'Contract Time',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.grey,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          _buildContractFilterItem(Icons.work, 'Full Time', widget.filterState!.showFullTime),
+                          _buildContractFilterItem(Icons.work_outline, 'Part Time', widget.filterState!.showPartTime),
+                          _buildContractFilterItem(Icons.date_range, 'Season', widget.filterState!.showSeason),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+          ],
         ),
       ),
     );
   }
 
-  Future<List<Job>> _fetchAllJobs() async {
-    print("Fetching jobs for map...");
-    final QuerySnapshot querySnapshot = await FirebaseFirestore.instance
-        .collection('JobListings')
-        .get();
+  List<Job> _applyFilters(List<Job> jobs) {
+    if (widget.filterState == null) return jobs;
 
-    final jobs = querySnapshot.docs
-        .map((doc) => Job.fromFirestore(doc.data() as Map<String, dynamic>, doc.id))
-        .toList();
+    // Apply job spec filters
+    final activeSpecs = widget.filterState!.activeJobSpecs;
+    if (activeSpecs.isNotEmpty) {
+      jobs = jobs.where((job) {
+        return job.category.any((cat) => activeSpecs.contains(cat));
+      }).toList();
+    }
 
-    print("Total jobs fetched for map: ${jobs.length}");
-    // Print each job's location to verify uniqueness
-    for (var job in jobs) {
-      print("${job.id}: ${job.latitude}, ${job.longitude}");
+    // Apply contract type filters
+    final activeTypes = widget.filterState!.activeContractTypes;
+    if (activeTypes.isNotEmpty) {
+      jobs = jobs.where((job) {
+        return activeTypes.contains(job.type);
+      }).toList();
     }
 
     return jobs;
   }
 
-  void _clearFilters() {
-    setState(() {
-      showFullTime = false;
-      showPartTime = false;
-      showSeason = false;
-      showService = false;
-      showManager = false;
-      showBar = false;
-      showDelivery = false;
-      showSommelier = false;
-      showCleaning = false;
-      showCook = false;
-      selectedRegion = null;
-    });
-    _searchJobs(); // Refresh jobs after clearing filters
+  Widget _buildJobFilterItem(IconData icon, String label, bool isSelected) {
+    return InkWell(
+      onTap: () => widget.filterState!.toggleJobSpec(label),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+        decoration: BoxDecoration(
+          color: isSelected ? Colors.blue.withOpacity(0.1) : Colors.transparent,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              icon,
+              size: 20,
+              color: isSelected ? Colors.blue : Colors.grey[600],
+            ),
+            const SizedBox(width: 12),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 14,
+                color: isSelected ? Colors.blue : Colors.grey[800],
+                fontWeight: isSelected ? FontWeight.w500 : FontWeight.normal,
+              ),
+            ),
+            const Spacer(),
+            if (isSelected)
+              const Icon(
+                Icons.check,
+                size: 18,
+                color: Colors.blue,
+              ),
+          ],
+        ),
+      ),
+    );
   }
 
-  void _searchJobs() async {
-    Query query = FirebaseFirestore.instance.collection('JobListings');
-
-    List<String> titleFilters = [];
-    List<String> typeFilters = [];
-
-    // Build filters
-    if (showService) titleFilters.add('Service');
-    if (showManager) titleFilters.add('Manager');
-    if (showBar) titleFilters.add('Bar');
-    if (showDelivery) titleFilters.add('Delivery');
-    if (showSommelier) titleFilters.add('Sommelier');
-    if (showCleaning) titleFilters.add('Cleaning');
-    if (showCook) titleFilters.add('Cook');
-
-    if (showFullTime) typeFilters.add('Full Time');
-    if (showPartTime) typeFilters.add('Part Time');
-    if (showSeason) typeFilters.add('Season');
-
-    // Apply filters
-    if (selectedRegion != null) {
-      query = query.where('region', isEqualTo: selectedRegion);
-    }
-
-    if (titleFilters.isNotEmpty) {
-      query = query.where('category', arrayContainsAny: titleFilters);
-    }
-
-    // Execute query
-    final QuerySnapshot querySnapshot = await query.get();
-    List<Job> jobs = querySnapshot.docs
-        .map((doc) => Job.fromFirestore(doc.data() as Map<String, dynamic>, doc.id))
-        .toList();
-
-    // Apply type filters in memory
-    if (typeFilters.isNotEmpty) {
-      jobs = jobs.where((job) => typeFilters.contains(job.type)).toList();
-    }
-
-    // Debug logs
-    debugPrint('===== JOBS SEARCH RESULTS =====');
-    debugPrint('Total jobs found: ${jobs.length}');
-    for (var job in jobs) {
-      debugPrint('Job: ${job.restaurant} - ${job.title}');
-      debugPrint('Location: ${job.latitude}, ${job.longitude}');
-    }
-    debugPrint('=============================');
-
-    setState(() => _jobs = jobs);
-  }
-
-  Widget filterChip(String label, bool isSelected) {
-    return FilterChip(
-      label: Text(label),
-      selected: isSelected,
-      onSelected: (bool value) {
-        setState(() {
-          switch (label) {
-            case 'Service':
-              showService = value;
-              break;
-            case 'Manager':
-              showManager = value;
-              break;
-            case 'Cook':
-              showCook = value;
-              break;
-            case 'Cleaning':
-              showCleaning = value;
-              break;
-            case 'Delivery':
-              showDelivery = value;
-              break;
-            case 'Bar':
-              showBar = value;
-              break;
-            case 'Sommelier':
-              showSommelier = value;
-              break;
-            case 'Full Time':
-              showFullTime = value;
-              break;
-            case 'Part Time':
-              showPartTime = value;
-              break;
-            case 'Season':
-              showSeason = value;
-              break;
-          }
-        });
-      },
-      backgroundColor: Colors.blue.shade100,
-      selectedColor: Colors.blue.shade400,
-      labelStyle: TextStyle(color: isSelected ? Colors.white : Colors.black),
-      shape: const StadiumBorder(side: BorderSide(color: Colors.blue)),
+  Widget _buildContractFilterItem(IconData icon, String label, bool isSelected) {
+    return InkWell(
+      onTap: () => widget.filterState!.toggleContractType(label),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+        decoration: BoxDecoration(
+          color: isSelected ? Colors.green.withOpacity(0.1) : Colors.transparent,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              icon,
+              size: 20,
+              color: isSelected ? Colors.green : Colors.grey[600],
+            ),
+            const SizedBox(width: 12),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 14,
+                color: isSelected ? Colors.green : Colors.grey[800],
+                fontWeight: isSelected ? FontWeight.w500 : FontWeight.normal,
+              ),
+            ),
+            const Spacer(),
+            if (isSelected)
+              const Icon(
+                Icons.check,
+                size: 18,
+                color: Colors.green,
+              ),
+          ],
+        ),
+      ),
     );
   }
 }

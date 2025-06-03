@@ -29,7 +29,19 @@ class _JobsMainScreenState extends State<JobsMainScreen> {
   }
 
   @override
+  void initState() {
+    super.initState();
+    // Listen to filter changes
+    _filterState.addListener(() {
+      setState(() {
+        // This will rebuild the UI when filters change
+      });
+    });
+  }
+
+  @override
   void dispose() {
+    _filterState.removeListener(() {});
     _filterState.dispose();
     super.dispose();
   }
@@ -92,7 +104,7 @@ class _JobsMainScreenState extends State<JobsMainScreen> {
                                 top: -2,
                                 child: Container(
                                   padding: const EdgeInsets.all(4),
-                                  decoration: BoxDecoration(
+                                  decoration: const BoxDecoration(
                                     color: Colors.red,
                                     shape: BoxShape.circle,
                                   ),

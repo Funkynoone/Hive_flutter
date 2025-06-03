@@ -159,7 +159,7 @@ class _MapFilterScreenState extends State<MapFilterScreen>
 
     if (sameOwner && jobs.length > 1) {
       // Show radial menu for same restaurant
-      const screenPoint = CustomPoint(0.0, 0.0); // We'll calculate this properly
+      final screenPoint = const CustomPoint(0.0, 0.0); // We'll calculate this properly
       setState(() {
         selectedClusterJobs = jobs;
         _radialMenuPosition = Offset(center.longitude * 1000, center.latitude * 1000); // Temporary fix
