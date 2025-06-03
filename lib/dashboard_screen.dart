@@ -82,80 +82,108 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Widget _buildChatButton() {
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
-          .collection('chats')
-          .where('participants', arrayContains: FirebaseAuth.instance.currentUser?.uid)
+          .collection('notifications')
+          .where('userId', isEqualTo: FirebaseAuth.instance.currentUser?.uid)
           .snapshots(),
-      builder: (context, snapshot) {
-        int unreadChats = 0;
-        if (snapshot.hasData) {
-          for (var doc in snapshot.data!.docs) {
-            final data = doc.data() as Map<String, dynamic>;
-            final unreadCount = data['unreadCount'] as int? ?? 0;
-            final lastSenderId = data['lastSenderId'] as String?;
+      builder: (context, notificationSnapshot) {
+        int unreadMessages = 0;
 
-            if (lastSenderId != FirebaseAuth.instance.currentUser?.uid && unreadCount > 0) {
-              unreadChats++;
-            }
-          }
+        // Count unread message notifications
+        if (notificationSnapshot.hasData) {
+          unreadMessages = notificationSnapshot.data!.docs.where((doc) {
+            final type = (doc.data() as Map<String, dynamic>)['type'] as String?;
+            return type == 'message';
+          }).length;
         }
 
-        return Stack(
-          children: [
-            IconButton(
-              icon: const Icon(Icons.chat_bubble_outline),
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const ChatListScreen(),
-                  ),
-                );
-              },
-            ),
-            if (unreadChats > 0)
-              Positioned(
-                right: 0,
-                top: 0,
-                child: Container(
-                  padding: const EdgeInsets.all(2),
-                  decoration: BoxDecoration(
-                    color: Colors.red,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  constraints: const BoxConstraints(
-                    minWidth: 20,
-                    minHeight: 20,
-                  ),
-                  child: Text(
-                    '$unreadChats',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 12,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
+        return StreamBuilder<QuerySnapshot>(
+          stream: FirebaseFirestore.instance
+              .collection('chats')
+              .where('participants', arrayContains: FirebaseAuth.instance.currentUser?.uid)
+              .snapshots(),
+          builder: (context, chatSnapshot) {
+            int unreadChats = 0;
+
+            // Count unread chats
+            if (chatSnapshot.hasData) {
+              for (var doc in chatSnapshot.data!.docs) {
+                final data = doc.data() as Map<String, dynamic>;
+                final unreadCount = data['unreadCount'] as int? ?? 0;
+                final lastSenderId = data['lastSenderId'] as String?;
+
+                if (lastSenderId != FirebaseAuth.instance.currentUser?.uid && unreadCount > 0) {
+                  unreadChats++;
+                }
+              }
+            }
+
+            final totalUnread = unreadMessages + unreadChats;
+
+            return Stack(
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.chat_bubble_outline),
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const ChatListScreen(),
+                      ),
+                    );
+                  },
                 ),
-              ),
-          ],
+                if (totalUnread > 0)
+                  Positioned(
+                    right: 0,
+                    top: 0,
+                    child: Container(
+                      padding: const EdgeInsets.all(2),
+                      decoration: BoxDecoration(
+                        color: Colors.red,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      constraints: const BoxConstraints(
+                        minWidth: 20,
+                        minHeight: 20,
+                      ),
+                      child: Text(
+                        '$totalUnread',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  ),
+              ],
+            );
+          },
         );
       },
     );
   }
 
   Widget _buildNotificationButton() {
-    return StreamBuilder<List<NotificationModel>>(
-      stream: NotificationService().getNotifications(
-        FirebaseAuth.instance.currentUser!.uid,
-      ),
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('notifications')
+          .where('userId', isEqualTo: FirebaseAuth.instance.currentUser!.uid)
+          .snapshots(),
       builder: (context, snapshot) {
-        final unreadCount = snapshot.data
-            ?.where((notification) => !notification.read)
-            .length ?? 0;
+        // Count only CV and message notifications
+        int unreadCount = 0;
+        if (snapshot.hasData) {
+          unreadCount = snapshot.data!.docs.where((doc) {
+            final type = (doc.data() as Map<String, dynamic>)['type'] as String?;
+            return type == 'cv' || type == 'message';
+          }).length;
+        }
 
         return Stack(
           children: [
             IconButton(
-              icon: const Icon(Icons.mail_outline),
+              icon: const Icon(Icons.notifications_none),
               onPressed: () {
                 Navigator.push(
                   context,

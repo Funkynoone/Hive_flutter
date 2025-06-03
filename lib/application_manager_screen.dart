@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'chat_screen.dart';
 
 class ApplicationManagerScreen extends StatefulWidget {
   final String ownerId;
@@ -44,7 +44,10 @@ class _ApplicationManagerScreenState extends State<ApplicationManagerScreen> {
 
       final batch = FirebaseFirestore.instance.batch();
       for (var doc in notifications.docs) {
-        batch.delete(doc.reference);
+        final type = (doc.data() as Map<String, dynamic>)['type'] as String?;
+        if (type == 'cv') {
+          batch.delete(doc.reference);
+        }
       }
       await batch.commit();
 
@@ -63,145 +66,20 @@ class _ApplicationManagerScreenState extends State<ApplicationManagerScreen> {
     }
   }
 
-  Future<void> _acceptApplication(Map<String, dynamic> data, String notificationId) async {
-    try {
-      // Store chatRoomId in a function-scope variable
-      final String chatRoomId = '${widget.ownerId}_${data['senderId']}_${data['data']['jobId']}';
-      final String jobTitle = data['data']['jobTitle'] ?? 'Job Chat';
+  String _getTimeAgo(DateTime? dateTime) {
+    if (dateTime == null) return '';
 
-      // Create chat room
-      await FirebaseFirestore.instance
-          .collection('chats')
-          .doc(chatRoomId)
-          .set({
-        'participants': [widget.ownerId, data['senderId']],
-        'jobId': data['data']['jobId'],
-        'jobTitle': jobTitle,
-        'businessName': data['data']['businessName'],
-        'lastMessage': data['message'],
-        'lastMessageTime': FieldValue.serverTimestamp(),
-        'lastSenderId': data['senderId'],
-        'unreadCount': 0,
-        'createdAt': FieldValue.serverTimestamp(),
-        'status': 'active',
-      });
-
-      // Add the initial message
-      await FirebaseFirestore.instance
-          .collection('chats')
-          .doc(chatRoomId)
-          .collection('messages')
-          .add({
-        'text': data['message'],
-        'senderId': data['senderId'],
-        'timestamp': FieldValue.serverTimestamp(),
-        'isRead': true,
-        'senderName': data['data']['applicantName']
-      });
-
-      // Update notification for owner
-      await FirebaseFirestore.instance
-          .collection('notifications')
-          .doc(notificationId)
-          .update({
-        'status': 'accepted',
-        'read': true,
-        'chatRoomId': chatRoomId
-      });
-
-      // Create notification for user
-      await FirebaseFirestore.instance
-          .collection('notifications')
-          .add({
-        'userId': data['senderId'],
-        'senderId': widget.ownerId,
-        'title': 'Application Update',
-        'message': data['message'],
-        'type': 'application_status',
-        'read': false,
-        'timestamp': FieldValue.serverTimestamp(),
-        'status': 'accepted',
-        'data': {
-          'jobId': data['data']['jobId'],
-          'jobTitle': jobTitle,
-          'businessName': data['data']['businessName'],
-          'chatRoomId': chatRoomId
-        }
-      });
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Application accepted')),
-        );
-
-        // Navigate to chat using stored variables
-        _openChat(chatRoomId, jobTitle);
-      }
-    } catch (e) {
-      print("Error accepting application: $e");
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error accepting application: $e')),
-        );
-      }
-    }
-  }
-
-// Add this method in the class
-  void _openChat(String chatRoomId, String jobTitle) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => ChatScreen(
-          chatRoomId: chatRoomId,
-          jobTitle: jobTitle,
-        ),
-      ),
-    );
-  }
-
-  Future<void> _rejectApplication(String notificationId, Map<String, dynamic> data) async {
-    try {
-      // Update original notification
-      await FirebaseFirestore.instance
-          .collection('notifications')
-          .doc(notificationId)
-          .update({
-        'status': 'rejected',
-        'read': true,
-      });
-
-      // Create notification for user about rejection
-      await FirebaseFirestore.instance
-          .collection('notifications')
-          .add({
-        'userId': data['senderId'],  // Send to the applicant
-        'senderId': widget.ownerId,  // From the owner
-        'title': 'Application Update',
-        'message': data['message'],  // Original message
-        'type': 'application_status',
-        'read': false,
-        'timestamp': FieldValue.serverTimestamp(),
-        'status': 'rejected',
-        'data': {
-          'jobId': data['data']['jobId'],
-          'jobTitle': data['data']['jobTitle'],
-          'businessName': data['data']['businessName'],
-        }
-      });
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Application rejected')),
-        );
-      }
-    } catch (e) {
-      print("Error rejecting application: $e");
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error rejecting application: $e')),
-        );
-      }
+    final difference = DateTime.now().difference(dateTime);
+    if (difference.inDays > 7) {
+      return '${dateTime.day}/${dateTime.month}/${dateTime.year}';
+    } else if (difference.inDays > 0) {
+      return '${difference.inDays}d ago';
+    } else if (difference.inHours > 0) {
+      return '${difference.inHours}h ago';
+    } else if (difference.inMinutes > 0) {
+      return '${difference.inMinutes}m ago';
+    } else {
+      return 'Just now';
     }
   }
 
@@ -209,7 +87,7 @@ class _ApplicationManagerScreenState extends State<ApplicationManagerScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Applications'),
+        title: const Text('Notifications'),
         actions: [
           IconButton(
             icon: const Icon(Icons.delete_sweep),
@@ -222,7 +100,6 @@ class _ApplicationManagerScreenState extends State<ApplicationManagerScreen> {
         stream: FirebaseFirestore.instance
             .collection('notifications')
             .where('userId', isEqualTo: widget.ownerId)
-            .orderBy('timestamp', descending: true)
             .snapshots(),
         builder: (context, snapshot) {
           if (snapshot.hasError) {
@@ -234,97 +111,104 @@ class _ApplicationManagerScreenState extends State<ApplicationManagerScreen> {
           }
 
           if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-            return const Center(child: Text('No applications yet'));
+            return const Center(child: Text('No notifications'));
+          }
+
+          // Filter and sort notifications manually
+          final notifications = snapshot.data!.docs
+              .where((doc) {
+            final type = (doc.data() as Map<String, dynamic>)['type'] as String?;
+            return type == 'cv' || type == 'message';
+          })
+              .toList();
+
+          notifications.sort((a, b) {
+            final aTime = (a.data() as Map<String, dynamic>)['timestamp'] as Timestamp?;
+            final bTime = (b.data() as Map<String, dynamic>)['timestamp'] as Timestamp?;
+            if (aTime == null || bTime == null) return 0;
+            return bTime.compareTo(aTime);
+          });
+
+          if (notifications.isEmpty) {
+            return const Center(child: Text('No notifications'));
           }
 
           return ListView.builder(
-            itemCount: snapshot.data!.docs.length,
+            itemCount: notifications.length,
             itemBuilder: (context, index) {
-              final notification = snapshot.data!.docs[index];
+              final notification = notifications[index];
               final data = notification.data() as Map<String, dynamic>;
-
-              if (data['message'] == null || data['message'].toString().isEmpty) {
-                return const SizedBox.shrink();
-              }
-
               final type = data['type'] as String;
-              final isRead = data['read'] as bool;
-              final status = data['status'] as String? ?? 'pending';
+              final timestamp = (data['timestamp'] as Timestamp?)?.toDate();
 
-              return Dismissible(
-                key: Key(notification.id),
-                background: Container(
-                  color: Colors.red,
-                  alignment: Alignment.centerRight,
-                  padding: const EdgeInsets.only(right: 20),
-                  child: const Icon(Icons.delete, color: Colors.white),
-                ),
-                onDismissed: (direction) {
-                  _deleteNotification(notification.id);
-                },
-                child: Card(
-                  color: isRead ? null : Colors.blue.shade50,
+              if (type == 'message') {
+                // Simple message notification
+                return Card(
+                  margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   child: ListTile(
-                    title: Text(data['data']['jobTitle'] ?? 'Job Application'),
-                    subtitle: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                    leading: CircleAvatar(
+                      backgroundColor: Colors.blue,
+                      child: const Icon(Icons.message, color: Colors.white),
+                    ),
+                    title: Text(
+                      'New message from ${data['data']['applicantName'] ?? 'someone'}',
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    subtitle: Text(
+                      'Regarding: ${data['data']['jobTitle'] ?? 'your job posting'}',
+                      style: TextStyle(color: Colors.grey[600]),
+                    ),
+                    trailing: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
                         Text(
-                          '${data['data']['applicantName']} sent a message about ${data['data']['businessName'] ?? 'your job posting'}:',
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: Colors.grey,
+                          _getTimeAgo(timestamp),
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey[600],
                           ),
                         ),
-                        Padding(
-                          padding: const EdgeInsets.only(top: 8.0, bottom: 8.0),
-                          child: Container(
-                            padding: const EdgeInsets.all(8),
-                            decoration: BoxDecoration(
-                              color: Colors.grey[100],
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Text(data['message']),
-                          ),
+                        const SizedBox(height: 4),
+                        IconButton(
+                          icon: const Icon(Icons.delete_outline, size: 20),
+                          onPressed: () => _deleteNotification(notification.id),
+                          tooltip: 'Delete',
                         ),
-                        if (status != 'pending')
-                          Text(
-                            'Status: ${status.toUpperCase()}',
-                            style: TextStyle(
-                              color: status == 'accepted' ? Colors.green : Colors.red,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
                       ],
+                    ),
+                  ),
+                );
+              } else if (type == 'cv') {
+                // CV notification
+                return Card(
+                  margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  child: ListTile(
+                    leading: CircleAvatar(
+                      backgroundColor: Colors.green,
+                      child: const Icon(Icons.description, color: Colors.white),
+                    ),
+                    title: Text(
+                      'CV received from ${data['data']['applicantName'] ?? 'someone'}',
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    subtitle: Text(
+                      'For: ${data['data']['jobTitle'] ?? 'your job posting'}',
+                      style: TextStyle(color: Colors.grey[600]),
                     ),
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        if (status == 'pending') ...[
-                          if (type == 'cv')
-                            IconButton(
-                              icon: const Icon(Icons.description),
-                              onPressed: () async {
-                                final cvUrl = data['data']['cvUrl'];
-                                if (cvUrl != null) {
-                                  await launchUrl(Uri.parse(cvUrl));
-                                }
-                              },
-                              tooltip: 'View CV',
-                            ),
-                          IconButton(
-                            icon: const Icon(Icons.check_circle_outline),
-                            color: Colors.green,
-                            onPressed: () => _acceptApplication(data, notification.id),
-                            tooltip: 'Accept',
-                          ),
-                          IconButton(
-                            icon: const Icon(Icons.cancel_outlined),
-                            color: Colors.red,
-                            onPressed: () => _rejectApplication(notification.id, data),
-                            tooltip: 'Reject',
-                          ),
-                        ],
+                        IconButton(
+                          icon: const Icon(Icons.download),
+                          onPressed: () async {
+                            final cvUrl = data['data']['cvUrl'];
+                            if (cvUrl != null) {
+                              await launchUrl(Uri.parse(cvUrl));
+                            }
+                          },
+                          tooltip: 'Download CV',
+                        ),
                         IconButton(
                           icon: const Icon(Icons.delete_outline),
                           onPressed: () => _deleteNotification(notification.id),
@@ -333,8 +217,10 @@ class _ApplicationManagerScreenState extends State<ApplicationManagerScreen> {
                       ],
                     ),
                   ),
-                ),
-              );
+                );
+              }
+
+              return const SizedBox.shrink();
             },
           );
         },

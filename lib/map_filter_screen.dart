@@ -118,7 +118,7 @@ class _MapFilterScreenState extends State<MapFilterScreen>
     restaurantGroups.clear();
     for (var job in jobs) {
       // Ensure latitude and longitude are valid numbers
-      if (job.latitude == null || job.longitude == null || job.latitude.isNaN || job.longitude.isNaN) {
+      if (job.latitude.isNaN || job.longitude.isNaN) {
         print('MapFilterScreen: Skipping job with invalid coordinates: ${job.title}');
         continue;
       }
@@ -330,7 +330,7 @@ class _MapFilterScreenState extends State<MapFilterScreen>
       print('MapFilterScreen: Processing job group for ${firstJob.restaurant} at Lat: ${firstJob.latitude}, Lng: ${firstJob.longitude}');
 
       // Ensure valid coordinates before creating LatLng
-      if (firstJob.latitude == null || firstJob.longitude == null || firstJob.latitude.isNaN || firstJob.longitude.isNaN) {
+      if (firstJob.latitude.isNaN || firstJob.longitude.isNaN) {
         print('MapFilterScreen: Invalid coordinates for job: ${firstJob.title}. Skipping marker creation.');
         return;
       }
@@ -399,18 +399,6 @@ class _MapFilterScreenState extends State<MapFilterScreen>
     final color = JobMarkerUtils.getJobColor(job.category);
     final icon = JobMarkerUtils.getJobIcon(job.category);
 
-    if (color == null || icon == null) {
-      print('MapFilterScreen: Warning! JobMarkerUtils returned null color or icon for job: ${job.title}, category: ${job.category}. Defaulting to generic marker.');
-      return Container( // Fallback generic marker
-        decoration: BoxDecoration(
-          color: Colors.grey,
-          shape: BoxShape.circle,
-          border: Border.all(color: Colors.black, width: 2),
-        ),
-        child: const Icon(Icons.help_outline, color: Colors.white, size: 24),
-      );
-    }
-
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -441,20 +429,6 @@ class _MapFilterScreenState extends State<MapFilterScreen>
     print('MapFilterScreen: Building grouped job marker for ${jobs.length} jobs');
 
     final primaryColor = JobMarkerUtils.getJobColor(jobs.first.category);
-
-    if (primaryColor == null) {
-      print('MapFilterScreen: Warning! JobMarkerUtils returned null primary color for grouped marker. Defaulting to grey.');
-      return Container( // Fallback generic marker
-        width: 40,
-        height: 40,
-        decoration: BoxDecoration(
-          color: Colors.grey,
-          shape: BoxShape.circle,
-          border: Border.all(color: Colors.black, width: 2),
-        ),
-        child: Center(child: Text(jobs.length.toString(), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
-      );
-    }
 
     return Stack(
       children: [

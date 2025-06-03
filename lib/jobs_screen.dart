@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:hive_flutter/models/job.dart';
 import 'package:hive_flutter/models/job_filter_state.dart';
 import 'job_card.dart';
