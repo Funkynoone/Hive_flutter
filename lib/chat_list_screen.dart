@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'chat_screen.dart';
+import 'package:hive_flutter/chat_screen.dart';
+import 'package:hive_flutter/user_chat_list_screen.dart';
 
 class ChatListScreen extends StatefulWidget {
   const ChatListScreen({super.key});
@@ -15,6 +16,7 @@ class _ChatListScreenState extends State<ChatListScreen> with SingleTickerProvid
   final currentUser = FirebaseAuth.instance.currentUser;
   late TabController _tabController;
   bool isBusinessOwner = false;
+  bool _isLoading = true;
 
   @override
   void initState() {
@@ -38,6 +40,7 @@ class _ChatListScreenState extends State<ChatListScreen> with SingleTickerProvid
           .get();
       setState(() {
         isBusinessOwner = docSnapshot['isBusinessOwner'] ?? false;
+        _isLoading = false;
       });
     }
   }
@@ -181,6 +184,19 @@ class _ChatListScreenState extends State<ChatListScreen> with SingleTickerProvid
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Messages')),
+        body: const Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    // If not a business owner, show the user chat list
+    if (!isBusinessOwner) {
+      return const UserChatListScreen();
+    }
+
+    // For business owners, show the tabbed interface
     return Scaffold(
       appBar: AppBar(
         title: const Text('Messages'),
