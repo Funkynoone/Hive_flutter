@@ -47,15 +47,16 @@ class _UserChatListScreenState extends State<UserChatListScreen> with SingleTick
     }
   }
 
-  // Modified to accept isNaturePending for notifications stream
-  Widget _buildMessageCard(DocumentSnapshot doc, {bool isNaturePending = false}) {
+  // Modified to accept isNaturePending and to handle different data structures
+  Widget _buildMessageCard(DocumentSnapshot doc, {bool isNaturePending = false, bool isFeedback = false}) {
     final data = doc.data() as Map<String, dynamic>;
     final timestamp = (data['timestamp'] as Timestamp?)?.toDate();
-    final status = data['status'] as String?; // This will be null for notifications
 
-    final bool isRejected = status == 'rejected';
-    // If isNaturePending is true, it's from the notifications stream for the pending tab.
-    // Otherwise, rely on the status field (for declined messages from user_messages).
+    // 'status' field is expected from userApplicationFeedback or original user_messages
+    // For notifications (isNaturePending), status is inferred as 'pending'.
+    final status = data['status'] as String?;
+
+    final bool isRejected = status == 'rejected' || status == 'declined'; // Treat 'declined' same as 'rejected' for UI
     final bool isActuallyPending = isNaturePending || status == 'pending';
 
     Color cardColor = Colors.grey[200]!;
@@ -70,7 +71,7 @@ class _UserChatListScreenState extends State<UserChatListScreen> with SingleTick
       textColor = Colors.black87;
       subTextColor = Colors.grey[600]!;
       avatarBackgroundColor = Colors.red[300]!;
-      statusText = 'DECLINED';
+      statusText = 'DECLINED'; // Show "DECLINED" for both 'rejected' and 'declined' status
       statusTagColor = Colors.redAccent;
     } else if (isActuallyPending) {
       cardColor = Colors.orange[50]!;
@@ -80,13 +81,17 @@ class _UserChatListScreenState extends State<UserChatListScreen> with SingleTick
       subTextColor = Colors.grey[600]!;
     }
 
-    // Assuming notification 'data' field holds jobTitle, businessName
-    // For user_messages, these are in data['data']
-    // We need to access them consistently. Let's check if 'data' itself contains them,
-    // typical for a notification, or if they are nested further.
-    // Based on JobDetailScreen, notifications store these in a nested 'data' map.
-    // user_messages also stores them in a nested 'data' map.
-    final innerData = data['data'] as Map<String, dynamic>? ?? {};
+    // Adjust how innerData is extracted based on the source
+    Map<String, dynamic> innerData;
+    String messageText = data['message'] as String? ?? ''; // Default message source
+
+    if (isFeedback) { // Data from userApplicationFeedback
+      innerData = data; // jobTitle, businessName are top-level
+      // userApplicationFeedback might not have a 'message' field, adjust as needed or show a generic text
+      messageText = 'Your application was declined.'; // Or pull from a specific field if you add one
+    } else { // Data from notifications or original user_messages structure
+      innerData = data['data'] as Map<String, dynamic>? ?? {};
+    }
 
 
     return Card(
@@ -148,7 +153,7 @@ class _UserChatListScreenState extends State<UserChatListScreen> with SingleTick
           children: [
             const SizedBox(height: 8),
             Text(
-              data['message'] ?? '', // Message is top-level in both notifications and user_messages
+              messageText,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(color: subTextColor),
@@ -160,7 +165,7 @@ class _UserChatListScreenState extends State<UserChatListScreen> with SingleTick
             ),
           ],
         ),
-        onTap: null, // Pending/Declined messages are not tappable to chat
+        onTap: null,
       ),
     );
   }
@@ -251,16 +256,80 @@ class _UserChatListScreenState extends State<UserChatListScreen> with SingleTick
       body: TabBarView(
         controller: _tabController,
         children: [
-          // Pending Messages - Now fetches from 'notifications'
+          // Pending Messages - Fetches from 'notifications'
           StreamBuilder<QuerySnapshot>(
             stream: FirebaseFirestore.instance
-                .collection('notifications') // Querying 'notifications' collection
-                .where('senderId', isEqualTo: currentUser!.uid) // Notification was SENT BY the current user
-                .where('type', isEqualTo: 'message') // Is a message type notification
+                .collection('notifications')
+                .where('senderId', isEqualTo: currentUser!.uid)
+                .where('type', isEqualTo: 'message')
                 .orderBy('timestamp', descending: true)
                 .snapshots(),
             builder: (context, snapshot) {
               final logPrefix = "[PENDING-NOTIFICATIONS ${DateTime.now().toIso8601String()}] (${currentUser!.uid}) -";
+
+              // ... (existing error handling and loading state) ...
+              if (snapshot.hasError) {
+                print("$logPrefix ERROR: ${snapshot.error}");
+                if (snapshot.error.toString().toLowerCase().contains('index')) {
+                  return Center( /* ... Index error UI ... */ );
+                }
+                return Center( /* ... Generic error UI ... */ );
+              }
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator());
+              }
+              // ... (existing count update and empty state logic) ...
+
+              int newCount = 0;
+              if (snapshot.hasData) {
+                newCount = snapshot.data!.docs.length;
+                // ... (logging) ...
+              }
+              if (_pendingCount != newCount) { /* ... update count ... */ }
+              if (newCount == 0) {
+                return const Center(child: Text('No pending applications'));
+              }
+
+              return ListView.builder(
+                itemCount: snapshot.data!.docs.length,
+                itemBuilder: (context, index) => _buildMessageCard(snapshot.data!.docs[index], isNaturePending: true),
+              );
+            },
+          ),
+
+          // Accepted Messages - Fetches from 'chats'
+          StreamBuilder<QuerySnapshot>(
+            stream: FirebaseFirestore.instance
+                .collection('chats')
+                .where('participants', arrayContains: currentUser!.uid)
+                .orderBy('lastMessageTime', descending: true)
+                .snapshots(),
+            builder: (context, snapshot) {
+              // ... (existing logic for accepted tab is fine) ...
+              final logPrefix = "[ACCEPTED ${DateTime.now().toIso8601String()}] (${currentUser!.uid}) -";
+              if (snapshot.hasError) { /* ... error handling ... */ return Center(child: Text('Error loading accepted: ${snapshot.error}. Check logs.'));}
+              if (snapshot.connectionState == ConnectionState.waiting) { return const Center(child: CircularProgressIndicator()); }
+              int newCount = 0;
+              if (snapshot.hasData && snapshot.data!.docs.isNotEmpty) { newCount = snapshot.data!.docs.length; }
+              if (_acceptedCount != newCount) { /* ... update count ... */ }
+              if (newCount == 0) { return const Center(child: Text('No accepted applications')); }
+              return ListView.builder(
+                itemCount: snapshot.data!.docs.length,
+                itemBuilder: (context, index) => _buildAcceptedChatCard(snapshot.data!.docs[index]),
+              );
+            },
+          ),
+
+          // Declined Messages - NOW fetches from 'userApplicationFeedback'
+          StreamBuilder<QuerySnapshot>(
+            stream: FirebaseFirestore.instance
+                .collection('userApplicationFeedback') // <--- CHANGE: Querying new collection
+                .where('userId', isEqualTo: currentUser!.uid) // Feedback for the current user
+                .where('status', isEqualTo: 'declined') // Where status is 'declined'
+                .orderBy('timestamp', descending: true)
+                .snapshots(),
+            builder: (context, snapshot) {
+              final logPrefix = "[DECLINED-FEEDBACK ${DateTime.now().toIso8601String()}] (${currentUser!.uid}) -";
 
               print("$logPrefix Stream state: ${snapshot.connectionState}");
               print("$logPrefix Has data: ${snapshot.hasData}");
@@ -269,7 +338,6 @@ class _UserChatListScreenState extends State<UserChatListScreen> with SingleTick
               if (snapshot.hasError) {
                 print("$logPrefix ERROR: ${snapshot.error}");
                 print("$logPrefix Stack: ${snapshot.stackTrace}");
-                // Check for index error message specifically
                 if (snapshot.error.toString().toLowerCase().contains('index')) {
                   return Center(
                     child: Padding(
@@ -282,13 +350,13 @@ class _UserChatListScreenState extends State<UserChatListScreen> with SingleTick
                           const Text('Database Index Required', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                           const SizedBox(height: 8),
                           Text(
-                            'A Firestore index is required for this query to work. Please create the following index in your Firebase console for the "notifications" collection:',
+                            'A Firestore index is required. Please create the following index in your Firebase console for the "userApplicationFeedback" collection:',
                             textAlign: TextAlign.center,
                             style: TextStyle(color: Colors.grey[700]),
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            'Fields: senderId (Ascending), type (Ascending), timestamp (Descending)',
+                            'Fields: userId (Ascending), status (Ascending), timestamp (Descending)', // Adjusted for the new query
                             textAlign: TextAlign.center,
                             style: TextStyle(fontFamily: 'monospace', color: Colors.grey[700]),
                           ),
@@ -309,7 +377,7 @@ class _UserChatListScreenState extends State<UserChatListScreen> with SingleTick
                       const SizedBox(height: 8),
                       ElevatedButton(
                         onPressed: () {
-                          setState(() {}); // Basic retry
+                          setState(() {});
                         },
                         child: const Text('Retry'),
                       ),
@@ -326,139 +394,12 @@ class _UserChatListScreenState extends State<UserChatListScreen> with SingleTick
               int newCount = 0;
               if (snapshot.hasData) {
                 newCount = snapshot.data!.docs.length;
-                print("$logPrefix Data received: $newCount documents from 'notifications'");
+                print("$logPrefix Data received: $newCount documents from 'userApplicationFeedback'");
 
                 for (var doc in snapshot.data!.docs) {
                   final docData = doc.data() as Map<String, dynamic>;
-                  final messageContent = docData['message'] as String? ?? "N/A";
-                  final displayMessage = messageContent.length > 20 ? messageContent.substring(0, 20) + "..." : messageContent;
-                  print("$logPrefix Doc ${doc.id}: (Notification as Pending) message=${displayMessage}");
+                  print("$logPrefix Doc ${doc.id}: (Declined Feedback) status=${docData['status']}, job=${docData['jobTitle']}");
                 }
-              }
-
-              if (_pendingCount != newCount) {
-                WidgetsBinding.instance.addPostFrameCallback((_) {
-                  if (mounted) setState(() => _pendingCount = newCount);
-                });
-              }
-
-              if (newCount == 0) {
-                print("$logPrefix No pending messages (from notifications)");
-                return const Center(child: Text('No pending applications'));
-              }
-
-              return ListView.builder(
-                itemCount: snapshot.data!.docs.length,
-                // Pass isNaturePending: true for these notification documents
-                itemBuilder: (context, index) => _buildMessageCard(snapshot.data!.docs[index], isNaturePending: true),
-              );
-            },
-          ),
-
-          // Accepted Messages - Stays the same, fetches from 'chats'
-          StreamBuilder<QuerySnapshot>(
-            stream: FirebaseFirestore.instance
-                .collection('chats')
-                .where('participants', arrayContains: currentUser!.uid)
-                .orderBy('lastMessageTime', descending: true)
-                .snapshots(),
-            builder: (context, snapshot) {
-              final logPrefix = "[ACCEPTED ${DateTime.now().toIso8601String()}] (${currentUser!.uid}) -";
-              // ... (logging and error handling as before) ...
-              if (snapshot.hasError) {
-                print("$logPrefix Error: ${snapshot.error}");
-                return Center(child: Text('Error loading accepted: ${snapshot.error}. Check logs.'));
-              }
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return const Center(child: CircularProgressIndicator());
-              }
-
-              int newCount = 0;
-              if (snapshot.hasData && snapshot.data!.docs.isNotEmpty) {
-                newCount = snapshot.data!.docs.length;
-                print("$logPrefix Data received: $newCount items.");
-              } else {
-                print("$logPrefix No data or empty docs. ConnectionState: ${snapshot.connectionState}");
-              }
-
-              if (_acceptedCount != newCount) {
-                WidgetsBinding.instance.addPostFrameCallback((_) {
-                  if (mounted) setState(() => _acceptedCount = newCount);
-                });
-              }
-
-              if (newCount == 0) {
-                return const Center(child: Text('No accepted applications'));
-              }
-
-              return ListView.builder(
-                itemCount: snapshot.data!.docs.length,
-                itemBuilder: (context, index) => _buildAcceptedChatCard(snapshot.data!.docs[index]),
-              );
-            },
-          ),
-
-          // Declined Messages - Stays the same, fetches from 'user_messages'
-          StreamBuilder<QuerySnapshot>(
-            stream: FirebaseFirestore.instance
-                .collection('user_messages')
-                .where('userId', isEqualTo: currentUser!.uid)
-                .where('status', isEqualTo: 'rejected')
-                .orderBy('timestamp', descending: true)
-                .snapshots(),
-            builder: (context, snapshot) {
-              final logPrefix = "[DECLINED ${DateTime.now().toIso8601String()}] (${currentUser!.uid}) -";
-              // ... (logging and error handling as before) ...
-              if (snapshot.hasError) {
-                print("$logPrefix Error: ${snapshot.error}");
-                // Check for index error message specifically
-                if (snapshot.error.toString().toLowerCase().contains('index')) {
-                  return Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const Icon(Icons.warning_amber_rounded, size: 48, color: Colors.orange),
-                          const SizedBox(height: 16),
-                          const Text('Database Index Required', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                          const SizedBox(height: 8),
-                          Text(
-                            'A Firestore index is required for this query to work. Please create the following index in your Firebase console for the "user_messages" collection:',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(color: Colors.grey[700]),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            'Fields: userId (Ascending), status (Ascending), timestamp (Descending)',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(fontFamily: 'monospace', color: Colors.grey[700]),
-                          ),
-                          const SizedBox(height: 8),
-                          Text('Error details: ${snapshot.error}', style: TextStyle(fontSize: 12, color: Colors.red[300])),
-                        ],
-                      ),
-                    ),
-                  );
-                }
-                return Center(child: Text('Error loading declined: ${snapshot.error}. Check logs.'));
-              }
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return const Center(child: CircularProgressIndicator());
-              }
-
-              int newCount = 0;
-              if (snapshot.hasData && snapshot.data!.docs.isNotEmpty) {
-                newCount = snapshot.data!.docs.length;
-                print("$logPrefix Data received: $newCount items.");
-                for (var doc in snapshot.data!.docs) {
-                  final docData = doc.data() as Map<String, dynamic>;
-                  final messageContent = docData['message'] as String? ?? "N/A";
-                  final displayMessage = messageContent.length > 20 ? messageContent.substring(0, 20) + "..." : messageContent;
-                  print("$logPrefix Doc ${doc.id}: (Declined user_message) status=${docData['status']}, message=${displayMessage}");
-                }
-              } else {
-                print("$logPrefix No data or empty docs. ConnectionState: ${snapshot.connectionState}");
               }
 
               if (_declinedCount != newCount) {
@@ -468,12 +409,14 @@ class _UserChatListScreenState extends State<UserChatListScreen> with SingleTick
               }
 
               if (newCount == 0) {
+                print("$logPrefix No declined applications (from feedback)");
                 return const Center(child: Text('No declined applications'));
               }
 
               return ListView.builder(
                 itemCount: snapshot.data!.docs.length,
-                itemBuilder: (context, index) => _buildMessageCard(snapshot.data!.docs[index]), // isNaturePending defaults to false
+                // Pass isFeedback: true to use the correct data structure for title/businessName
+                itemBuilder: (context, index) => _buildMessageCard(snapshot.data!.docs[index], isFeedback: true),
               );
             },
           ),
