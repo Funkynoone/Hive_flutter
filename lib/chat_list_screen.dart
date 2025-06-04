@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:url_launcher/url_launcher.dart';
+// import 'package:url_launcher/url_launcher.dart'; // Not currently used
 import 'package:hive_flutter/chat_screen.dart';
 import 'package:hive_flutter/user_chat_list_screen.dart';
 
@@ -17,6 +17,8 @@ class _ChatListScreenState extends State<ChatListScreen> with SingleTickerProvid
   late TabController _tabController;
   bool isBusinessOwner = false;
   bool _isLoading = true;
+
+  int _unreadMessagesCount = 0;
 
   @override
   void initState() {
@@ -38,60 +40,92 @@ class _ChatListScreenState extends State<ChatListScreen> with SingleTickerProvid
           .collection('users')
           .doc(user.uid)
           .get();
-      setState(() {
-        isBusinessOwner = docSnapshot['isBusinessOwner'] ?? false;
-        _isLoading = false;
-      });
+      if(mounted){
+        setState(() {
+          isBusinessOwner = docSnapshot.exists ? (docSnapshot.data()?['isBusinessOwner'] ?? false) : false;
+          _isLoading = false;
+        });
+      }
+    } else {
+      if(mounted){
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
-  Future<void> _acceptMessage(Map<String, dynamic> data, String notificationId) async {
-    try {
-      // Create chat room
-      final String chatRoomId = '${currentUser!.uid}_${data['senderId']}_${data['data']['jobId']}';
-      final String jobTitle = data['data']['jobTitle'] ?? 'Job Chat';
+  Future<void> _acceptMessage(Map<String, dynamic> originalNotificationData, String notificationId) async {
+    final ownerUid = currentUser!.uid;
+    final applicantId = originalNotificationData['senderId'] as String?;
+    final jobId = originalNotificationData['data']?['jobId'] as String?;
+    final jobTitle = originalNotificationData['data']?['jobTitle'] ?? 'Job Chat';
+    final businessData = await FirebaseFirestore.instance.collection('users').doc(ownerUid).get();
+    final businessName = businessData.data()?['businessProfile']?['businessName'] ?? originalNotificationData['data']?['businessName'] ?? 'Your Business';
+    final initialMessage = originalNotificationData['message'] as String?;
+    final applicantName = originalNotificationData['data']?['applicantName'] as String?;
 
-      await FirebaseFirestore.instance
-          .collection('chats')
-          .doc(chatRoomId)
-          .set({
-        'participants': [currentUser!.uid, data['senderId']],
-        'jobId': data['data']['jobId'],
+    if (applicantId == null || jobId == null || initialMessage == null) {
+      print("Error: Missing crucial data in notification for acceptance.");
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Error processing acceptance: key data missing.')),
+        );
+      }
+      return;
+    }
+
+    try {
+      final String chatRoomId = '${ownerUid}_${applicantId}_${jobId}';
+      WriteBatch batch = FirebaseFirestore.instance.batch();
+
+      DocumentReference chatRef = FirebaseFirestore.instance.collection('chats').doc(chatRoomId);
+      batch.set(chatRef, {
+        'participants': [ownerUid, applicantId],
+        'jobId': jobId,
         'jobTitle': jobTitle,
-        'businessName': data['data']['businessName'],
-        'lastMessage': data['message'],
+        'businessName': businessName,
+        'applicantName': applicantName,
+        'ownerId': ownerUid,
+        'applicantId': applicantId,
+        'lastMessage': initialMessage,
         'lastMessageTime': FieldValue.serverTimestamp(),
-        'lastSenderId': data['senderId'],
-        'unreadCount': 0,
+        'lastSenderId': applicantId,
+        'unreadCount': 1,
         'createdAt': FieldValue.serverTimestamp(),
         'status': 'active',
       });
 
-      // Add the initial message
-      await FirebaseFirestore.instance
-          .collection('chats')
-          .doc(chatRoomId)
-          .collection('messages')
-          .add({
-        'text': data['message'],
-        'senderId': data['senderId'],
+      DocumentReference messageRef = chatRef.collection('messages').doc();
+      batch.set(messageRef, {
+        'text': initialMessage,
+        'senderId': applicantId,
         'timestamp': FieldValue.serverTimestamp(),
-        'isRead': true,
-        'senderName': data['data']['applicantName']
+        'isRead': false,
+        'senderName': applicantName,
       });
 
-      // Delete the notification
-      await FirebaseFirestore.instance
-          .collection('notifications')
-          .doc(notificationId)
-          .delete();
+      final userMessagesQuery = await FirebaseFirestore.instance
+          .collection('user_messages')
+          .where('userId', isEqualTo: applicantId)
+          .where('data.jobId', isEqualTo: jobId)
+          .where('status', isEqualTo: 'pending')
+          .limit(1)
+          .get();
+
+      if (userMessagesQuery.docs.isNotEmpty) {
+        batch.delete(userMessagesQuery.docs.first.reference);
+      }
+
+      DocumentReference notificationRefDoc = FirebaseFirestore.instance.collection('notifications').doc(notificationId);
+      batch.delete(notificationRefDoc);
+
+      await batch.commit();
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Message accepted')),
+          const SnackBar(content: Text('Application accepted. Chat started.')),
         );
-
-        // Navigate to chat
         Navigator.push(
           context,
           MaterialPageRoute(
@@ -106,29 +140,61 @@ class _ChatListScreenState extends State<ChatListScreen> with SingleTickerProvid
       print("Error accepting message: $e");
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error accepting message: $e')),
+          SnackBar(content: Text('Error accepting message: ${e.toString()}')),
         );
       }
     }
   }
 
-  Future<void> _rejectMessage(String notificationId) async {
+  Future<void> _rejectMessage(Map<String, dynamic> originalNotificationData, String notificationId) async {
+    final applicantId = originalNotificationData['senderId'] as String?;
+    final jobId = originalNotificationData['data']?['jobId'] as String?;
+
+    if (applicantId == null || jobId == null) {
+      print("Error: Missing crucial data in notification for rejection.");
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Error processing rejection: key data missing.')),
+        );
+      }
+      return;
+    }
+
     try {
-      await FirebaseFirestore.instance
-          .collection('notifications')
-          .doc(notificationId)
-          .delete();
+      WriteBatch batch = FirebaseFirestore.instance.batch();
+
+      final userMessagesQuery = await FirebaseFirestore.instance
+          .collection('user_messages')
+          .where('userId', isEqualTo: applicantId)
+          .where('data.jobId', isEqualTo: jobId)
+          .where('status', isEqualTo: 'pending')
+          .limit(1)
+          .get();
+
+      if (userMessagesQuery.docs.isNotEmpty) {
+        batch.update(userMessagesQuery.docs.first.reference, {
+          'status': 'rejected',
+          'timestamp': FieldValue.serverTimestamp(),
+        });
+      } else {
+        print("Warning: Could not find corresponding user_message to mark as rejected for applicant $applicantId, job $jobId");
+      }
+
+      DocumentReference notificationRefDoc = FirebaseFirestore.instance.collection('notifications').doc(notificationId);
+      batch.delete(notificationRefDoc);
+
+      await batch.commit();
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Message rejected')),
+          const SnackBar(content: Text('Application rejected')),
         );
       }
     } catch (e) {
       print("Error rejecting message: $e");
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error rejecting message: $e')),
+          SnackBar(content: Text('Error rejecting message: ${e.toString()}')),
         );
       }
     }
@@ -136,38 +202,39 @@ class _ChatListScreenState extends State<ChatListScreen> with SingleTickerProvid
 
   Future<void> _deleteChat(String chatRoomId) async {
     try {
-      // Delete all messages in the chat
       final messages = await FirebaseFirestore.instance
           .collection('chats')
           .doc(chatRoomId)
           .collection('messages')
           .get();
 
-      final batch = FirebaseFirestore.instance.batch();
+      final batchDelete = FirebaseFirestore.instance.batch();
       for (var message in messages.docs) {
-        batch.delete(message.reference);
+        batchDelete.delete(message.reference);
       }
-      await batch.commit();
+      await batchDelete.commit();
 
-      // Delete the chat document itself
       await FirebaseFirestore.instance
           .collection('chats')
           .doc(chatRoomId)
           .delete();
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Chat deleted')),
-      );
+      if(mounted){
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Chat deleted')),
+        );
+      }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error deleting chat: $e')),
-      );
+      if(mounted){
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error deleting chat: $e')),
+        );
+      }
     }
   }
 
   String _getTimeAgo(DateTime? dateTime) {
     if (dateTime == null) return '';
-
     final difference = DateTime.now().difference(dateTime);
     if (difference.inDays > 7) {
       return '${dateTime.day}/${dateTime.month}/${dateTime.year}';
@@ -191,31 +258,27 @@ class _ChatListScreenState extends State<ChatListScreen> with SingleTickerProvid
       );
     }
 
-    // If not a business owner, show the user chat list
     if (!isBusinessOwner) {
       return const UserChatListScreen();
     }
 
-    // For business owners, show the tabbed interface
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Messages'),
+        title: const Text('My Applicants'),
         bottom: TabBar(
           controller: _tabController,
           indicatorColor: Colors.white,
           indicatorWeight: 3,
-          tabs: const [
-            Tab(text: 'Unread'),
-            Tab(text: 'Read'),
+          tabs: [
+            Tab(text: 'New Applications ($_unreadMessagesCount)'),
+            Tab(text: 'Active Chats'),
           ],
         ),
       ),
       body: TabBarView(
         controller: _tabController,
         children: [
-          // Unread Messages Tab
           _buildUnreadMessages(),
-          // Read Messages Tab
           _buildReadMessages(),
         ],
       ),
@@ -224,44 +287,46 @@ class _ChatListScreenState extends State<ChatListScreen> with SingleTickerProvid
 
   Widget _buildUnreadMessages() {
     if (!isBusinessOwner) {
-      return const Center(
-        child: Text('Only business owners can receive new messages'),
-      );
+      return const Center(child: Text("Access denied."));
     }
 
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
           .collection('notifications')
           .where('userId', isEqualTo: currentUser?.uid)
+          .where('type', isEqualTo: 'message')
+          .orderBy('timestamp', descending: true)
           .snapshots(),
       builder: (context, snapshot) {
+        if (snapshot.hasData) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) {
+              setState(() {
+                _unreadMessagesCount = snapshot.data!.docs.length;
+              });
+            }
+          });
+        } else if (snapshot.connectionState != ConnectionState.waiting && !snapshot.hasError) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) {
+              setState(() {
+                _unreadMessagesCount = 0;
+              });
+            }
+          });
+        }
+
         if (snapshot.hasError) {
           return Center(child: Text('Error: ${snapshot.error}'));
         }
-
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
         }
-
         if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-          return const Center(child: Text('No unread messages'));
+          return const Center(child: Text('No new applications'));
         }
 
-        // Filter for message type notifications and sort manually
-        final messageDocs = snapshot.data!.docs
-            .where((doc) => (doc.data() as Map<String, dynamic>)['type'] == 'message')
-            .toList();
-
-        messageDocs.sort((a, b) {
-          final aTime = (a.data() as Map<String, dynamic>)['timestamp'] as Timestamp?;
-          final bTime = (b.data() as Map<String, dynamic>)['timestamp'] as Timestamp?;
-          if (aTime == null || bTime == null) return 0;
-          return bTime.compareTo(aTime);
-        });
-
-        if (messageDocs.isEmpty) {
-          return const Center(child: Text('No unread messages'));
-        }
+        final messageDocs = snapshot.data!.docs;
 
         return ListView.builder(
           itemCount: messageDocs.length,
@@ -282,7 +347,7 @@ class _ChatListScreenState extends State<ChatListScreen> with SingleTickerProvid
                         CircleAvatar(
                           backgroundColor: Colors.blue,
                           child: Text(
-                            (data['data']['applicantName'] ?? 'U')[0].toUpperCase(),
+                            (data['data']?['applicantName'] ?? 'U')[0].toUpperCase(),
                             style: const TextStyle(color: Colors.white),
                           ),
                         ),
@@ -292,14 +357,14 @@ class _ChatListScreenState extends State<ChatListScreen> with SingleTickerProvid
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                data['data']['applicantName'] ?? 'Unknown',
+                                data['data']?['applicantName'] ?? 'Unknown Applicant',
                                 style: const TextStyle(
                                   fontWeight: FontWeight.bold,
                                   fontSize: 16,
                                 ),
                               ),
                               Text(
-                                'Applied for: ${data['data']['jobTitle']}',
+                                'Applied for: ${data['data']?['jobTitle'] ?? 'N/A'}',
                                 style: TextStyle(
                                   fontSize: 14,
                                   color: Colors.grey[600],
@@ -325,7 +390,7 @@ class _ChatListScreenState extends State<ChatListScreen> with SingleTickerProvid
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Text(
-                        data['message'],
+                        data['message'] ?? 'No message content.',
                         style: const TextStyle(fontSize: 14),
                       ),
                     ),
@@ -334,7 +399,7 @@ class _ChatListScreenState extends State<ChatListScreen> with SingleTickerProvid
                       mainAxisAlignment: MainAxisAlignment.end,
                       children: [
                         TextButton.icon(
-                          onPressed: () => _rejectMessage(notification.id),
+                          onPressed: () => _rejectMessage(data, notification.id),
                           icon: const Icon(Icons.close, color: Colors.red),
                           label: const Text('Reject', style: TextStyle(color: Colors.red)),
                         ),
@@ -377,7 +442,7 @@ class _ChatListScreenState extends State<ChatListScreen> with SingleTickerProvid
         }
 
         if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-          return const Center(child: Text('No conversations yet'));
+          return const Center(child: Text('No active conversations'));
         }
 
         return ListView.builder(
@@ -388,20 +453,14 @@ class _ChatListScreenState extends State<ChatListScreen> with SingleTickerProvid
 
             final lastMessage = data['lastMessage'] as String? ?? '';
             final jobTitle = data['jobTitle'] as String? ?? 'Job Chat';
-            final businessName = data['businessName'] as String? ?? '';
+            final applicantName = data['applicantName'] as String? ?? 'Applicant';
             final lastSenderId = data['lastSenderId'] as String?;
             final lastMessageTime = (data['lastMessageTime'] as Timestamp?)?.toDate();
             final unreadCount = data['unreadCount'] as int? ?? 0;
-            final participants = List<String>.from(data['participants'] ?? []);
+            // final participants = List<String>.from(data['participants'] ?? []); // Not strictly needed here if using lastSenderId
 
             final isLastMessageMine = lastSenderId == currentUser?.uid;
             final hasUnreadMessages = !isLastMessageMine && unreadCount > 0;
-
-            // Get the other participant's ID
-            final otherUserId = participants.firstWhere(
-                  (id) => id != currentUser?.uid,
-              orElse: () => '',
-            );
 
             return Dismissible(
               key: Key(chat.id),
@@ -425,7 +484,7 @@ class _ChatListScreenState extends State<ChatListScreen> with SingleTickerProvid
                     children: [
                       CircleAvatar(
                         backgroundColor: hasUnreadMessages ? Colors.blue : Colors.grey,
-                        child: Text(jobTitle[0].toUpperCase()),
+                        child: Text(applicantName.isNotEmpty ? applicantName[0].toUpperCase() : jobTitle[0].toUpperCase()),
                       ),
                       if (hasUnreadMessages)
                         Positioned(
@@ -462,7 +521,7 @@ class _ChatListScreenState extends State<ChatListScreen> with SingleTickerProvid
                         children: [
                           Expanded(
                             child: Text(
-                              jobTitle,
+                              applicantName,
                               style: const TextStyle(fontWeight: FontWeight.bold),
                               overflow: TextOverflow.ellipsis,
                             ),
@@ -477,25 +536,24 @@ class _ChatListScreenState extends State<ChatListScreen> with SingleTickerProvid
                             ),
                         ],
                       ),
-                      if (businessName.isNotEmpty)
-                        Text(
-                          businessName,
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.grey[600],
-                          ),
+                      Text(
+                        jobTitle,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey[600],
                         ),
+                      ),
                     ],
                   ),
-                  subtitle: Padding(
-                    padding: const EdgeInsets.only(top: 4),
+                  subtitle: Padding( // CORRECTED PADDING
+                    padding: const EdgeInsets.only(top: 4.0),
                     child: Row(
                       children: [
                         if (isLastMessageMine)
                           Padding(
-                            padding: const EdgeInsets.only(right: 4),
+                            padding: const EdgeInsets.only(right: 4.0),
                             child: Icon(
-                              Icons.done,
+                              Icons.done_all, // Assuming you might want done_all for read by other party
                               size: 16,
                               color: Colors.grey[600],
                             ),

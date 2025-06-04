@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'chat_screen.dart';
+import 'package:hive_flutter/chat_screen.dart'; // Assuming 'hive_flutter' is your project name and chat_screen.dart is in lib
 
 class UserChatListScreen extends StatefulWidget {
   const UserChatListScreen({super.key});
@@ -10,13 +10,29 @@ class UserChatListScreen extends StatefulWidget {
   _UserChatListScreenState createState() => _UserChatListScreenState();
 }
 
-class _UserChatListScreenState extends State<UserChatListScreen> {
+class _UserChatListScreenState extends State<UserChatListScreen> with SingleTickerProviderStateMixin {
   final currentUser = FirebaseAuth.instance.currentUser;
-  String _selectedFilter = 'All'; // All, Pending, Accepted
+  late TabController _tabController;
+
+  int _pendingCount = 0;
+  int _acceptedCount = 0;
+  int _declinedCount = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 3, vsync: this);
+    print("[UserChatListScreen] initState: currentUser UID: ${currentUser?.uid}");
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
 
   String _getTimeAgo(DateTime? dateTime) {
     if (dateTime == null) return '';
-
     final difference = DateTime.now().difference(dateTime);
     if (difference.inDays > 7) {
       return '${dateTime.day}/${dateTime.month}/${dateTime.year}';
@@ -31,263 +47,86 @@ class _UserChatListScreenState extends State<UserChatListScreen> {
     }
   }
 
-  Future<void> _deleteChat(String chatRoomId) async {
-    try {
-      // Delete all messages in the chat
-      final messages = await FirebaseFirestore.instance
-          .collection('chats')
-          .doc(chatRoomId)
-          .collection('messages')
-          .get();
+  Widget _buildMessageCard(DocumentSnapshot doc) {
+    final data = doc.data() as Map<String, dynamic>;
+    final timestamp = (data['timestamp'] as Timestamp?)?.toDate();
+    final status = data['status'] as String?;
 
-      final batch = FirebaseFirestore.instance.batch();
-      for (var message in messages.docs) {
-        batch.delete(message.reference);
-      }
-      await batch.commit();
+    final bool isRejected = status == 'rejected';
+    final bool isPending = status == 'pending';
 
-      // Delete the chat document itself
-      await FirebaseFirestore.instance
-          .collection('chats')
-          .doc(chatRoomId)
-          .delete();
+    Color cardColor = Colors.grey[200]!;
+    Color textColor = Colors.black87;
+    Color subTextColor = Colors.grey[700]!;
+    Color avatarBackgroundColor = Colors.grey[500]!;
+    String statusText = '';
+    Color statusTagColor = Colors.grey;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Chat deleted')),
-      );
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error deleting chat: $e')),
-      );
+    if (isRejected) {
+      cardColor = Colors.red[50]!;
+      textColor = Colors.black87;
+      subTextColor = Colors.grey[600]!;
+      avatarBackgroundColor = Colors.red[300]!;
+      statusText = 'DECLINED';
+      statusTagColor = Colors.redAccent;
+    } else if (isPending) {
+      cardColor = Colors.orange[50]!;
+      avatarBackgroundColor = Colors.orange[600]!;
+      statusText = 'PENDING';
+      statusTagColor = Colors.orangeAccent;
+      subTextColor = Colors.grey[600]!;
     }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('My Messages'),
-      ),
-      body: Column(
-        children: [
-          // Filter buttons
-          Container(
-            padding: const EdgeInsets.all(8),
-            child: Row(
-              children: [
-                Expanded(
-                  child: _buildFilterChip('All'),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: _buildFilterChip('Pending'),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: _buildFilterChip('Accepted'),
-                ),
-              ],
-            ),
-          ),
-          const Divider(height: 1),
-          // Chat list
-          Expanded(
-            child: _buildChatList(),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildFilterChip(String label) {
-    final isSelected = _selectedFilter == label;
-    return GestureDetector(
-      onTap: () {
-        setState(() {
-          _selectedFilter = label;
-        });
-      },
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        decoration: BoxDecoration(
-          color: isSelected ? Theme.of(context).primaryColor : Colors.grey[200],
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Center(
-          child: Text(
-            label,
-            style: TextStyle(
-              color: isSelected ? Colors.white : Colors.black87,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildChatList() {
-    return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('notifications')
-          .where('senderId', isEqualTo: currentUser?.uid)
-          .where('type', isEqualTo: 'message')
-          .snapshots(),
-      builder: (context, notificationSnapshot) {
-        return StreamBuilder<QuerySnapshot>(
-          stream: FirebaseFirestore.instance
-              .collection('chats')
-              .where('participants', arrayContains: currentUser?.uid)
-              .snapshots(),
-          builder: (context, chatSnapshot) {
-            // Combine pending (notifications) and accepted (chats) messages
-            final List<Map<String, dynamic>> allMessages = [];
-
-            // Add pending messages from notifications
-            if (notificationSnapshot.hasData) {
-              for (var doc in notificationSnapshot.data!.docs) {
-                final data = doc.data() as Map<String, dynamic>;
-                allMessages.add({
-                  'id': doc.id,
-                  'type': 'pending',
-                  'jobTitle': data['data']['jobTitle'] ?? 'Unknown Job',
-                  'businessName': data['data']['businessName'] ?? 'Unknown Business',
-                  'message': data['message'],
-                  'timestamp': data['timestamp'],
-                  'data': data,
-                });
-              }
-            }
-
-            // Add accepted messages from chats
-            if (chatSnapshot.hasData) {
-              for (var doc in chatSnapshot.data!.docs) {
-                final data = doc.data() as Map<String, dynamic>;
-                allMessages.add({
-                  'id': doc.id,
-                  'type': 'accepted',
-                  'jobTitle': data['jobTitle'] ?? 'Job Chat',
-                  'businessName': data['businessName'] ?? '',
-                  'lastMessage': data['lastMessage'] ?? '',
-                  'lastMessageTime': data['lastMessageTime'],
-                  'unreadCount': data['unreadCount'] ?? 0,
-                  'lastSenderId': data['lastSenderId'],
-                  'chatData': data,
-                });
-              }
-            }
-
-            // Filter based on selection
-            List<Map<String, dynamic>> filteredMessages = allMessages;
-            if (_selectedFilter == 'Pending') {
-              filteredMessages = allMessages.where((msg) => msg['type'] == 'pending').toList();
-            } else if (_selectedFilter == 'Accepted') {
-              filteredMessages = allMessages.where((msg) => msg['type'] == 'accepted').toList();
-            }
-
-            // Sort: accepted first, then by timestamp
-            filteredMessages.sort((a, b) {
-              // First sort by type (accepted before pending)
-              if (a['type'] != b['type']) {
-                return a['type'] == 'accepted' ? -1 : 1;
-              }
-
-              // Then sort by timestamp
-              final aTime = a['type'] == 'pending'
-                  ? (a['timestamp'] as Timestamp?)
-                  : (a['lastMessageTime'] as Timestamp?);
-              final bTime = b['type'] == 'pending'
-                  ? (b['timestamp'] as Timestamp?)
-                  : (b['lastMessageTime'] as Timestamp?);
-
-              if (aTime == null || bTime == null) return 0;
-              return bTime.compareTo(aTime);
-            });
-
-            if (filteredMessages.isEmpty) {
-              return Center(
-                child: Text(
-                  _selectedFilter == 'All'
-                      ? 'No messages yet'
-                      : 'No ${_selectedFilter.toLowerCase()} messages',
-                ),
-              );
-            }
-
-            return ListView.builder(
-              itemCount: filteredMessages.length,
-              itemBuilder: (context, index) {
-                final message = filteredMessages[index];
-
-                if (message['type'] == 'pending') {
-                  return _buildPendingMessageTile(message);
-                } else {
-                  return _buildAcceptedChatTile(message);
-                }
-              },
-            );
-          },
-        );
-      },
-    );
-  }
-
-  Widget _buildPendingMessageTile(Map<String, dynamic> message) {
-    final timestamp = (message['timestamp'] as Timestamp?)?.toDate();
 
     return Card(
+      elevation: 2,
+      color: cardColor,
       margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      color: Colors.grey[100], // Grey color for pending
       child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        leading: Stack(
-          children: [
-            CircleAvatar(
-              backgroundColor: Colors.grey,
-              child: Text(message['jobTitle'][0].toUpperCase()),
-            ),
-            Positioned(
-              right: 0,
-              bottom: 0,
-              child: Container(
-                width: 12,
-                height: 12,
-                decoration: BoxDecoration(
-                  color: Colors.orange,
-                  shape: BoxShape.circle,
-                  border: Border.all(color: Colors.white, width: 2),
-                ),
-              ),
-            ),
-          ],
+        contentPadding: const EdgeInsets.all(12),
+        leading: CircleAvatar(
+          backgroundColor: avatarBackgroundColor,
+          child: Text(
+            (data['data']?['businessName'] ?? 'B')[0].toUpperCase(),
+            style: const TextStyle(color: Colors.white),
+          ),
         ),
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Expanded(
                   child: Text(
-                    message['jobTitle'],
-                    style: const TextStyle(fontWeight: FontWeight.bold),
-                    overflow: TextOverflow.ellipsis,
+                    data['data']?['jobTitle'] ?? 'Job Application',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: textColor,
+                    ),
                   ),
                 ),
-                Text(
-                  _getTimeAgo(timestamp),
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey[600],
+                if (isRejected || isPending)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: statusTagColor,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      statusText,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                   ),
-                ),
               ],
             ),
             Text(
-              message['businessName'],
+              data['data']?['businessName'] ?? 'Unknown Business',
               style: TextStyle(
                 fontSize: 12,
-                color: Colors.grey[600],
+                color: subTextColor,
               ),
             ),
           ],
@@ -295,160 +134,254 @@ class _UserChatListScreenState extends State<UserChatListScreen> {
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const SizedBox(height: 4),
+            const SizedBox(height: 8),
             Text(
-              message['message'],
+              data['message'] ?? '',
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
-              style: TextStyle(color: Colors.grey[700]),
+              style: TextStyle(color: subTextColor),
             ),
             const SizedBox(height: 4),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-              decoration: BoxDecoration(
-                color: Colors.orange.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.orange.withOpacity(0.3)),
-              ),
-              child: const Text(
-                'Pending',
-                style: TextStyle(
-                  fontSize: 11,
-                  color: Colors.orange,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
+            Text(
+              _getTimeAgo(timestamp),
+              style: TextStyle(fontSize: 12, color: Colors.grey[600]),
             ),
           ],
         ),
+        onTap: null,
       ),
     );
   }
 
-  Widget _buildAcceptedChatTile(Map<String, dynamic> message) {
-    final chatData = message['chatData'] as Map<String, dynamic>;
-    final lastMessageTime = (message['lastMessageTime'] as Timestamp?)?.toDate();
-    final hasUnreadMessages = message['lastSenderId'] != currentUser?.uid &&
-        message['unreadCount'] > 0;
+  Widget _buildAcceptedChatCard(DocumentSnapshot doc) {
+    final data = doc.data() as Map<String, dynamic>;
+    final lastMessageTimestamp = (data['lastMessageTime'] as Timestamp?)?.toDate();
+    final businessName = data['businessName'] as String? ?? 'Unknown Business';
+    final jobTitle = data['jobTitle'] as String? ?? 'Job Chat';
+    final avatarChar = businessName.isNotEmpty ? businessName[0].toUpperCase() : 'B';
 
-    return Dismissible(
-      key: Key(message['id']),
-      background: Container(
-        color: Colors.red,
-        alignment: Alignment.centerRight,
-        padding: const EdgeInsets.only(right: 20),
-        child: const Icon(Icons.delete, color: Colors.white),
-      ),
-      onDismissed: (direction) => _deleteChat(message['id']),
-      child: Card(
-        elevation: hasUnreadMessages ? 3 : 1,
-        margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        color: hasUnreadMessages ? Colors.blue.shade50 : Colors.white,
-        child: ListTile(
-          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          leading: Stack(
-            children: [
-              CircleAvatar(
-                backgroundColor: Colors.blue,
-                child: Text(message['jobTitle'][0].toUpperCase()),
-              ),
-              if (hasUnreadMessages)
-                Positioned(
-                  right: 0,
-                  top: 0,
-                  child: Container(
-                    padding: const EdgeInsets.all(4),
-                    decoration: BoxDecoration(
-                      color: Colors.red,
-                      shape: BoxShape.circle,
-                      border: Border.all(color: Colors.white, width: 2),
-                    ),
-                    constraints: const BoxConstraints(
-                      minWidth: 16,
-                      minHeight: 16,
-                    ),
-                    child: Text(
-                      message['unreadCount'].toString(),
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 10,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                  ),
-                ),
-            ],
-          ),
-          title: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Expanded(
-                    child: Text(
-                      message['jobTitle'],
-                      style: const TextStyle(fontWeight: FontWeight.bold),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  Text(
-                    _getTimeAgo(lastMessageTime),
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey[600],
-                    ),
-                  ),
-                ],
-              ),
-              if (message['businessName'].isNotEmpty)
-                Text(
-                  message['businessName'],
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey[600],
-                  ),
-                ),
-            ],
-          ),
-          subtitle: Padding(
-            padding: const EdgeInsets.only(top: 4),
-            child: Row(
-              children: [
-                if (message['lastSenderId'] == currentUser?.uid)
-                  Padding(
-                    padding: const EdgeInsets.only(right: 4),
-                    child: Icon(
-                      Icons.done,
-                      size: 16,
-                      color: Colors.grey[600],
-                    ),
-                  ),
-                Expanded(
-                  child: Text(
-                    message['lastMessage'],
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: hasUnreadMessages ? Colors.black87 : Colors.grey[600],
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => ChatScreen(
-                  chatRoomId: message['id'],
-                  jobTitle: message['jobTitle'],
-                ),
-              ),
-            );
-          },
+    return Card(
+      elevation: 2,
+      color: Colors.lightBlue[50],
+      margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      child: ListTile(
+        contentPadding: const EdgeInsets.all(12),
+        leading: CircleAvatar(
+          backgroundColor: Colors.lightBlue,
+          child: Text(avatarChar, style: const TextStyle(color: Colors.white)),
         ),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(jobTitle, style: const TextStyle(fontWeight: FontWeight.bold)),
+            Text(businessName, style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+          ],
+        ),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const SizedBox(height: 8),
+            Text(data['lastMessage'] ?? 'No messages yet', maxLines: 1, overflow: TextOverflow.ellipsis),
+            const SizedBox(height: 4),
+            Text(_getTimeAgo(lastMessageTimestamp), style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+          ],
+        ),
+        trailing: data['unreadCount'] != null && data['unreadCount'] > 0 && data['lastSenderId'] != currentUser?.uid
+            ? Container(
+          padding: const EdgeInsets.all(6),
+          decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
+          child: Text(
+            data['unreadCount'].toString(),
+            style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+          ),
+        )
+            : null,
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => ChatScreen(
+                chatRoomId: doc.id,
+                jobTitle: data['jobTitle'] ?? 'Job Chat',
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (currentUser == null) {
+      print("[UserChatListScreen] build: currentUser is null. Showing login message.");
+      return Scaffold(
+        appBar: AppBar(title: const Text('My Messages')),
+        body: const Center(child: Text('Please log in to see messages.')),
+      );
+    }
+    print("[UserChatListScreen] build: Building UI for user ${currentUser!.uid}");
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('My Messages'),
+        bottom: TabBar(
+          controller: _tabController,
+          indicatorColor: Colors.white,
+          indicatorWeight: 3,
+          tabs: [
+            Tab(text: 'Pending ($_pendingCount)'),
+            Tab(text: 'Accepted ($_acceptedCount)'),
+            Tab(text: 'Declined ($_declinedCount)'),
+          ],
+        ),
+      ),
+      body: TabBarView(
+        controller: _tabController,
+        children: [
+          // Pending Messages
+          StreamBuilder<QuerySnapshot>(
+            stream: FirebaseFirestore.instance
+                .collection('user_messages')
+                .where('userId', isEqualTo: currentUser!.uid)
+                .where('status', isEqualTo: 'pending')
+                .orderBy('timestamp', descending: true)
+                .snapshots(),
+            builder: (context, snapshot) {
+              final logPrefix = "[${DateTime.now()}] PENDING TAB (${currentUser!.uid}) -";
+              print("$logPrefix ConnectionState: ${snapshot.connectionState}, HasData: ${snapshot.hasData}, HasError: ${snapshot.hasError}");
+
+              if (snapshot.hasError) {
+                print("$logPrefix Error: ${snapshot.error}");
+                print("$logPrefix StackTrace: ${snapshot.stackTrace}");
+                return Center(child: Text('Error loading pending: ${snapshot.error}. Check logs.'));
+              }
+
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                print("$logPrefix Still waiting for data...");
+                return const Center(child: CircularProgressIndicator());
+              }
+
+              int newCount = 0;
+              if (snapshot.hasData && snapshot.data!.docs.isNotEmpty) {
+                newCount = snapshot.data!.docs.length;
+                print("$logPrefix Data received: $newCount items.");
+              } else {
+                print("$logPrefix No data or empty docs. ConnectionState: ${snapshot.connectionState}");
+              }
+
+              if (_pendingCount != newCount) {
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (mounted) setState(() => _pendingCount = newCount);
+                });
+              }
+
+              if (newCount == 0) {
+                return const Center(child: Text('No pending messages'));
+              }
+
+              return ListView.builder(
+                itemCount: snapshot.data!.docs.length,
+                itemBuilder: (context, index) => _buildMessageCard(snapshot.data!.docs[index]),
+              );
+            },
+          ),
+
+          // Accepted Messages
+          StreamBuilder<QuerySnapshot>(
+            stream: FirebaseFirestore.instance
+                .collection('chats')
+                .where('participants', arrayContains: currentUser!.uid)
+                .orderBy('lastMessageTime', descending: true)
+                .snapshots(),
+            builder: (context, snapshot) {
+              final logPrefix = "[${DateTime.now()}] ACCEPTED TAB (${currentUser!.uid}) -";
+              print("$logPrefix ConnectionState: ${snapshot.connectionState}, HasData: ${snapshot.hasData}, HasError: ${snapshot.hasError}");
+
+              if (snapshot.hasError) {
+                print("$logPrefix Error: ${snapshot.error}");
+                print("$logPrefix StackTrace: ${snapshot.stackTrace}");
+                return Center(child: Text('Error loading accepted: ${snapshot.error}. Check logs.'));
+              }
+
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                print("$logPrefix Still waiting for data...");
+                return const Center(child: CircularProgressIndicator());
+              }
+
+              int newCount = 0;
+              if (snapshot.hasData && snapshot.data!.docs.isNotEmpty) {
+                newCount = snapshot.data!.docs.length;
+                print("$logPrefix Data received: $newCount items.");
+              } else {
+                print("$logPrefix No data or empty docs. ConnectionState: ${snapshot.connectionState}");
+              }
+
+              if (_acceptedCount != newCount) {
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (mounted) setState(() => _acceptedCount = newCount);
+                });
+              }
+
+              if (newCount == 0) {
+                return const Center(child: Text('No accepted applications'));
+              }
+
+              return ListView.builder(
+                itemCount: snapshot.data!.docs.length,
+                itemBuilder: (context, index) => _buildAcceptedChatCard(snapshot.data!.docs[index]),
+              );
+            },
+          ),
+
+          // Declined Messages
+          StreamBuilder<QuerySnapshot>(
+            stream: FirebaseFirestore.instance
+                .collection('user_messages')
+                .where('userId', isEqualTo: currentUser!.uid)
+                .where('status', isEqualTo: 'rejected')
+                .orderBy('timestamp', descending: true)
+                .snapshots(),
+            builder: (context, snapshot) {
+              final logPrefix = "[${DateTime.now()}] DECLINED TAB (${currentUser!.uid}) -";
+              print("$logPrefix ConnectionState: ${snapshot.connectionState}, HasData: ${snapshot.hasData}, HasError: ${snapshot.hasError}");
+
+              if (snapshot.hasError) {
+                print("$logPrefix Error: ${snapshot.error}");
+                print("$logPrefix StackTrace: ${snapshot.stackTrace}");
+                return Center(child: Text('Error loading declined: ${snapshot.error}. Check logs.'));
+              }
+
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                print("$logPrefix Still waiting for data...");
+                return const Center(child: CircularProgressIndicator());
+              }
+
+              int newCount = 0;
+              if (snapshot.hasData && snapshot.data!.docs.isNotEmpty) {
+                newCount = snapshot.data!.docs.length;
+                print("$logPrefix Data received: $newCount items.");
+              } else {
+                print("$logPrefix No data or empty docs. ConnectionState: ${snapshot.connectionState}");
+              }
+
+              if (_declinedCount != newCount) {
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (mounted) setState(() => _declinedCount = newCount);
+                });
+              }
+
+              if (newCount == 0) {
+                return const Center(child: Text('No declined applications'));
+              }
+
+              return ListView.builder(
+                itemCount: snapshot.data!.docs.length,
+                itemBuilder: (context, index) => _buildMessageCard(snapshot.data!.docs[index]),
+              );
+            },
+          ),
+        ],
       ),
     );
   }
