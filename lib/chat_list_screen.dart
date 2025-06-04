@@ -112,7 +112,6 @@ class _ChatListScreenState extends State<ChatListScreen> with SingleTickerProvid
         'senderName': applicantName,
       });
 
-      // 3. Delete the notification (user_messages logic removed)
       DocumentReference notificationRefDoc = FirebaseFirestore.instance
           .collection('notifications').doc(notificationId);
       batch.delete(notificationRefDoc);
@@ -181,7 +180,6 @@ class _ChatListScreenState extends State<ChatListScreen> with SingleTickerProvid
         'originalNotificationId': notificationId, // For reference
       });
 
-      // 2. Delete the notification (user_messages logic removed)
       DocumentReference notificationRefDoc = FirebaseFirestore.instance
           .collection('notifications').doc(notificationId);
       batch.delete(notificationRefDoc);
