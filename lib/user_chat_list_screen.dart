@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:hive_flutter/chat_screen.dart'; // Assuming 'hive_flutter' is your project name and chat_screen.dart is in lib
+import 'package:hive_flutter/chat_screen.dart';
 
 class UserChatListScreen extends StatefulWidget {
   const UserChatListScreen({super.key});
@@ -14,9 +14,10 @@ class _UserChatListScreenState extends State<UserChatListScreen> with SingleTick
   final currentUser = FirebaseAuth.instance.currentUser;
   late TabController _tabController;
 
-  int _pendingCount = 0;
-  int _acceptedCount = 0;
-  int _declinedCount = 0;
+  // Use ValueNotifier for reactive counter updates
+  final ValueNotifier<int> _pendingCount = ValueNotifier<int>(0);
+  final ValueNotifier<int> _acceptedCount = ValueNotifier<int>(0);
+  final ValueNotifier<int> _declinedCount = ValueNotifier<int>(0);
 
   @override
   void initState() {
@@ -28,6 +29,9 @@ class _UserChatListScreenState extends State<UserChatListScreen> with SingleTick
   @override
   void dispose() {
     _tabController.dispose();
+    _pendingCount.dispose();
+    _acceptedCount.dispose();
+    _declinedCount.dispose();
     super.dispose();
   }
 
@@ -47,16 +51,12 @@ class _UserChatListScreenState extends State<UserChatListScreen> with SingleTick
     }
   }
 
-  // Modified to accept isNaturePending and to handle different data structures
   Widget _buildMessageCard(DocumentSnapshot doc, {bool isNaturePending = false, bool isFeedback = false}) {
     final data = doc.data() as Map<String, dynamic>;
     final timestamp = (data['timestamp'] as Timestamp?)?.toDate();
 
-    // 'status' field is expected from userApplicationFeedback or original user_messages
-    // For notifications (isNaturePending), status is inferred as 'pending'.
     final status = data['status'] as String?;
-
-    final bool isRejected = status == 'rejected' || status == 'declined'; // Treat 'declined' same as 'rejected' for UI
+    final bool isRejected = status == 'rejected' || status == 'declined';
     final bool isActuallyPending = isNaturePending || status == 'pending';
 
     Color cardColor = Colors.grey[200]!;
@@ -71,7 +71,7 @@ class _UserChatListScreenState extends State<UserChatListScreen> with SingleTick
       textColor = Colors.black87;
       subTextColor = Colors.grey[600]!;
       avatarBackgroundColor = Colors.red[300]!;
-      statusText = 'DECLINED'; // Show "DECLINED" for both 'rejected' and 'declined' status
+      statusText = 'DECLINED';
       statusTagColor = Colors.redAccent;
     } else if (isActuallyPending) {
       cardColor = Colors.orange[50]!;
@@ -81,18 +81,15 @@ class _UserChatListScreenState extends State<UserChatListScreen> with SingleTick
       subTextColor = Colors.grey[600]!;
     }
 
-    // Adjust how innerData is extracted based on the source
     Map<String, dynamic> innerData;
-    String messageText = data['message'] as String? ?? ''; // Default message source
+    String messageText = data['message'] as String? ?? '';
 
-    if (isFeedback) { // Data from userApplicationFeedback
-      innerData = data; // jobTitle, businessName are top-level
-      // userApplicationFeedback might not have a 'message' field, adjust as needed or show a generic text
-      messageText = 'Your application was declined.'; // Or pull from a specific field if you add one
-    } else { // Data from notifications or original user_messages structure
+    if (isFeedback) {
+      innerData = data;
+      messageText = 'Your application was declined.';
+    } else {
       innerData = data['data'] as Map<String, dynamic>? ?? {};
     }
-
 
     return Card(
       elevation: 2,
@@ -228,198 +225,211 @@ class _UserChatListScreenState extends State<UserChatListScreen> with SingleTick
     );
   }
 
+  Widget _buildPendingTab() {
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('notifications')
+          .where('senderId', isEqualTo: currentUser!.uid)
+          .where('type', isEqualTo: 'message')
+          .orderBy('timestamp', descending: true)
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          if (snapshot.error.toString().toLowerCase().contains('index')) {
+            return Center(
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.warning_amber_rounded, size: 48, color: Colors.orange),
+                    const SizedBox(height: 16),
+                    const Text('Database Index Required'),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Please create an index for:\nnotifications -> senderId + type + timestamp (descending)',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: Colors.grey[600]),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }
+          return Center(child: Text('Error: ${snapshot.error}'));
+        }
+
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        // Update count
+        if (snapshot.hasData) {
+          final newCount = snapshot.data!.docs.length;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            _pendingCount.value = newCount;
+          });
+        }
+
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+          return const Center(child: Text('No pending applications'));
+        }
+
+        return ListView.builder(
+          itemCount: snapshot.data!.docs.length,
+          itemBuilder: (context, index) => _buildMessageCard(
+              snapshot.data!.docs[index],
+              isNaturePending: true
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildAcceptedTab() {
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('chats')
+          .where('participants', arrayContains: currentUser!.uid)
+          .orderBy('lastMessageTime', descending: true)
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          return Center(child: Text('Error: ${snapshot.error}'));
+        }
+
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        // Update count
+        if (snapshot.hasData) {
+          final newCount = snapshot.data!.docs.length;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            _acceptedCount.value = newCount;
+          });
+        }
+
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+          return const Center(child: Text('No accepted applications'));
+        }
+
+        return ListView.builder(
+          itemCount: snapshot.data!.docs.length,
+          itemBuilder: (context, index) => _buildAcceptedChatCard(snapshot.data!.docs[index]),
+        );
+      },
+    );
+  }
+
+  Widget _buildDeclinedTab() {
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('userApplicationFeedback')
+          .where('userId', isEqualTo: currentUser!.uid)
+          .where('status', isEqualTo: 'declined')
+          .orderBy('timestamp', descending: true)
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          if (snapshot.error.toString().toLowerCase().contains('index')) {
+            return Center(
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.warning_amber_rounded, size: 48, color: Colors.orange),
+                    const SizedBox(height: 16),
+                    const Text('Database Index Required'),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Please create an index for:\nuserApplicationFeedback -> userId + status + timestamp (descending)',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: Colors.grey[600]),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }
+          return Center(child: Text('Error: ${snapshot.error}'));
+        }
+
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        // Update count
+        if (snapshot.hasData) {
+          final newCount = snapshot.data!.docs.length;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            _declinedCount.value = newCount;
+          });
+        }
+
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+          return const Center(child: Text('No declined applications'));
+        }
+
+        return ListView.builder(
+          itemCount: snapshot.data!.docs.length,
+          itemBuilder: (context, index) => _buildMessageCard(
+              snapshot.data!.docs[index],
+              isFeedback: true
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (currentUser == null) {
-      print("[UserChatListScreen] build: currentUser is null. Showing login message.");
       return Scaffold(
         appBar: AppBar(title: const Text('My Messages')),
         body: const Center(child: Text('Please log in to see messages.')),
       );
     }
-    print("[UserChatListScreen] build: Building UI for user ${currentUser!.uid}");
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('My Messages'),
-        bottom: TabBar(
-          controller: _tabController,
-          indicatorColor: Colors.white,
-          indicatorWeight: 3,
-          tabs: [
-            Tab(text: 'Pending ($_pendingCount)'),
-            Tab(text: 'Accepted ($_acceptedCount)'),
-            Tab(text: 'Declined ($_declinedCount)'),
-          ],
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(48),
+          child: ValueListenableBuilder<int>(
+            valueListenable: _pendingCount,
+            builder: (context, pendingValue, _) {
+              return ValueListenableBuilder<int>(
+                valueListenable: _acceptedCount,
+                builder: (context, acceptedValue, _) {
+                  return ValueListenableBuilder<int>(
+                    valueListenable: _declinedCount,
+                    builder: (context, declinedValue, _) {
+                      return TabBar(
+                        controller: _tabController,
+                        indicatorColor: Colors.white,
+                        indicatorWeight: 3,
+                        tabs: [
+                          Tab(text: 'Pending ($pendingValue)'),
+                          Tab(text: 'Accepted ($acceptedValue)'),
+                          Tab(text: 'Declined ($declinedValue)'),
+                        ],
+                      );
+                    },
+                  );
+                },
+              );
+            },
+          ),
         ),
       ),
       body: TabBarView(
         controller: _tabController,
         children: [
-          // Pending Messages - Fetches from 'notifications'
-          StreamBuilder<QuerySnapshot>(
-            stream: FirebaseFirestore.instance
-                .collection('notifications')
-                .where('senderId', isEqualTo: currentUser!.uid)
-                .where('type', isEqualTo: 'message')
-                .orderBy('timestamp', descending: true)
-                .snapshots(),
-            builder: (context, snapshot) {
-              final logPrefix = "[PENDING-NOTIFICATIONS ${DateTime.now().toIso8601String()}] (${currentUser!.uid}) -";
-
-              // ... (existing error handling and loading state) ...
-              if (snapshot.hasError) {
-                print("$logPrefix ERROR: ${snapshot.error}");
-                if (snapshot.error.toString().toLowerCase().contains('index')) {
-                  return Center( /* ... Index error UI ... */ );
-                }
-                return Center( /* ... Generic error UI ... */ );
-              }
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return const Center(child: CircularProgressIndicator());
-              }
-              // ... (existing count update and empty state logic) ...
-
-              int newCount = 0;
-              if (snapshot.hasData) {
-                newCount = snapshot.data!.docs.length;
-                // ... (logging) ...
-              }
-              if (_pendingCount != newCount) { /* ... update count ... */ }
-              if (newCount == 0) {
-                return const Center(child: Text('No pending applications'));
-              }
-
-              return ListView.builder(
-                itemCount: snapshot.data!.docs.length,
-                itemBuilder: (context, index) => _buildMessageCard(snapshot.data!.docs[index], isNaturePending: true),
-              );
-            },
-          ),
-
-          // Accepted Messages - Fetches from 'chats'
-          StreamBuilder<QuerySnapshot>(
-            stream: FirebaseFirestore.instance
-                .collection('chats')
-                .where('participants', arrayContains: currentUser!.uid)
-                .orderBy('lastMessageTime', descending: true)
-                .snapshots(),
-            builder: (context, snapshot) {
-              // ... (existing logic for accepted tab is fine) ...
-              final logPrefix = "[ACCEPTED ${DateTime.now().toIso8601String()}] (${currentUser!.uid}) -";
-              if (snapshot.hasError) { /* ... error handling ... */ return Center(child: Text('Error loading accepted: ${snapshot.error}. Check logs.'));}
-              if (snapshot.connectionState == ConnectionState.waiting) { return const Center(child: CircularProgressIndicator()); }
-              int newCount = 0;
-              if (snapshot.hasData && snapshot.data!.docs.isNotEmpty) { newCount = snapshot.data!.docs.length; }
-              if (_acceptedCount != newCount) { /* ... update count ... */ }
-              if (newCount == 0) { return const Center(child: Text('No accepted applications')); }
-              return ListView.builder(
-                itemCount: snapshot.data!.docs.length,
-                itemBuilder: (context, index) => _buildAcceptedChatCard(snapshot.data!.docs[index]),
-              );
-            },
-          ),
-
-          // Declined Messages - NOW fetches from 'userApplicationFeedback'
-          StreamBuilder<QuerySnapshot>(
-            stream: FirebaseFirestore.instance
-                .collection('userApplicationFeedback') // <--- CHANGE: Querying new collection
-                .where('userId', isEqualTo: currentUser!.uid) // Feedback for the current user
-                .where('status', isEqualTo: 'declined') // Where status is 'declined'
-                .orderBy('timestamp', descending: true)
-                .snapshots(),
-            builder: (context, snapshot) {
-              final logPrefix = "[DECLINED-FEEDBACK ${DateTime.now().toIso8601String()}] (${currentUser!.uid}) -";
-
-              print("$logPrefix Stream state: ${snapshot.connectionState}");
-              print("$logPrefix Has data: ${snapshot.hasData}");
-              print("$logPrefix Has error: ${snapshot.hasError}");
-
-              if (snapshot.hasError) {
-                print("$logPrefix ERROR: ${snapshot.error}");
-                print("$logPrefix Stack: ${snapshot.stackTrace}");
-                if (snapshot.error.toString().toLowerCase().contains('index')) {
-                  return Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const Icon(Icons.warning_amber_rounded, size: 48, color: Colors.orange),
-                          const SizedBox(height: 16),
-                          const Text('Database Index Required', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                          const SizedBox(height: 8),
-                          Text(
-                            'A Firestore index is required. Please create the following index in your Firebase console for the "userApplicationFeedback" collection:',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(color: Colors.grey[700]),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            'Fields: userId (Ascending), status (Ascending), timestamp (Descending)', // Adjusted for the new query
-                            textAlign: TextAlign.center,
-                            style: TextStyle(fontFamily: 'monospace', color: Colors.grey[700]),
-                          ),
-                          const SizedBox(height: 8),
-                          Text('Error details: ${snapshot.error}', style: TextStyle(fontSize: 12, color: Colors.red[300])),
-                        ],
-                      ),
-                    ),
-                  );
-                }
-                return Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(Icons.error_outline, size: 48, color: Colors.red),
-                      const SizedBox(height: 16),
-                      Text('Error: ${snapshot.error}'),
-                      const SizedBox(height: 8),
-                      ElevatedButton(
-                        onPressed: () {
-                          setState(() {});
-                        },
-                        child: const Text('Retry'),
-                      ),
-                    ],
-                  ),
-                );
-              }
-
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                print("$logPrefix Waiting for data...");
-                return const Center(child: CircularProgressIndicator());
-              }
-
-              int newCount = 0;
-              if (snapshot.hasData) {
-                newCount = snapshot.data!.docs.length;
-                print("$logPrefix Data received: $newCount documents from 'userApplicationFeedback'");
-
-                for (var doc in snapshot.data!.docs) {
-                  final docData = doc.data() as Map<String, dynamic>;
-                  print("$logPrefix Doc ${doc.id}: (Declined Feedback) status=${docData['status']}, job=${docData['jobTitle']}");
-                }
-              }
-
-              if (_declinedCount != newCount) {
-                WidgetsBinding.instance.addPostFrameCallback((_) {
-                  if (mounted) setState(() => _declinedCount = newCount);
-                });
-              }
-
-              if (newCount == 0) {
-                print("$logPrefix No declined applications (from feedback)");
-                return const Center(child: Text('No declined applications'));
-              }
-
-              return ListView.builder(
-                itemCount: snapshot.data!.docs.length,
-                // Pass isFeedback: true to use the correct data structure for title/businessName
-                itemBuilder: (context, index) => _buildMessageCard(snapshot.data!.docs[index], isFeedback: true),
-              );
-            },
-          ),
+          _buildPendingTab(),
+          _buildAcceptedTab(),
+          _buildDeclinedTab(),
         ],
       ),
     );

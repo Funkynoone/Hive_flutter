@@ -47,11 +47,11 @@ class _JobDetailsSheetState extends State<JobDetailsSheet> {
   @override
   Widget build(BuildContext context) {
     return DraggableScrollableSheet(
-      initialChildSize: 0.3,
-      minChildSize: 0.3,
+      initialChildSize: 0.35, // Slightly increased to accommodate buttons
+      minChildSize: 0.35,
       maxChildSize: 0.9,
       snap: true,
-      snapSizes: const [0.3, 0.9],
+      snapSizes: const [0.35, 0.9],
       controller: _controller,
       builder: (context, scrollController) {
         return Container(
@@ -82,11 +82,15 @@ class _JobDetailsSheetState extends State<JobDetailsSheet> {
                       const SizedBox(height: 12),
                       _buildTags(),
                       const SizedBox(height: 16),
+
+                      // Show buttons in both collapsed and expanded states
+                      _buildButtons(context, isCompact: !_isExpanded),
+
                       if (_isExpanded) ...[
-                        _buildFullDescription(),
                         const SizedBox(height: 16),
-                        _buildButtons(context),
+                        _buildFullDescription(),
                       ] else ...[
+                        const SizedBox(height: 12),
                         _buildCompactDescription(),
                         Center(
                           child: Padding(
@@ -216,7 +220,7 @@ class _JobDetailsSheetState extends State<JobDetailsSheet> {
       children: [
         Text(
           widget.job.description,
-          maxLines: 3,
+          maxLines: 2, // Reduced to make room for buttons
           overflow: TextOverflow.ellipsis,
           style: TextStyle(
             fontSize: 14,
@@ -266,7 +270,11 @@ class _JobDetailsSheetState extends State<JobDetailsSheet> {
     );
   }
 
-  Widget _buildButtons(BuildContext context) {
+  Widget _buildButtons(BuildContext context, {bool isCompact = false}) {
+    // Use smaller padding for compact mode
+    final verticalPadding = isCompact ? 8.0 : 12.0;
+    final fontSize = isCompact ? 14.0 : 16.0;
+
     return Row(
       children: [
         Expanded(
@@ -285,12 +293,15 @@ class _JobDetailsSheetState extends State<JobDetailsSheet> {
                 },
               );
             },
-            icon: const Icon(Icons.upload_file),
-            label: Text(_isUploading ? 'Uploading...' : 'Upload CV'),
+            icon: Icon(Icons.upload_file, size: isCompact ? 18 : 24),
+            label: Text(
+              _isUploading ? 'Uploading...' : 'Send CV',
+              style: TextStyle(fontSize: fontSize),
+            ),
             style: ElevatedButton.styleFrom(
               backgroundColor: Theme.of(context).primaryColor,
               foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(vertical: 12),
+              padding: EdgeInsets.symmetric(vertical: verticalPadding),
             ),
           ),
         ),
@@ -309,12 +320,15 @@ class _JobDetailsSheetState extends State<JobDetailsSheet> {
                 },
               );
             },
-            icon: const Icon(Icons.message),
-            label: Text(_isSending ? 'Sending...' : 'Contact Owner'),
+            icon: Icon(Icons.message, size: isCompact ? 18 : 24),
+            label: Text(
+              _isSending ? 'Sending...' : 'Contact',
+              style: TextStyle(fontSize: fontSize),
+            ),
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.green,
               foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(vertical: 12),
+              padding: EdgeInsets.symmetric(vertical: verticalPadding),
             ),
           ),
         ),
