@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-// import 'package:url_launcher/url_launcher.dart'; // Not currently used
 import 'package:hive_flutter/chat_screen.dart';
 import 'package:hive_flutter/user_chat_list_screen.dart';
 
@@ -62,16 +61,12 @@ class _ChatListScreenState extends State<ChatListScreen> with SingleTickerProvid
     final ownerUid = currentUser!.uid;
     final applicantId = originalNotificationData['senderId'] as String?;
     final jobId = originalNotificationData['data']?['jobId'] as String?;
-    final jobTitle = originalNotificationData['data']?['jobTitle'] ??
-        'Job Chat';
-    final businessData = await FirebaseFirestore.instance.collection('users')
-        .doc(ownerUid)
-        .get();
-    final businessName = businessData
-        .data()?['businessProfile']?['businessName'] ??
-        originalNotificationData['data']?['businessName'] ?? 'Your Business';
+    final jobTitle = originalNotificationData['data']?['jobTitle'] ?? 'Job Chat';
     final initialMessage = originalNotificationData['message'] as String?;
     final applicantName = originalNotificationData['data']?['applicantName'] as String?;
+    // It's good to get businessName from the notification if available, or fallback.
+    final businessName = originalNotificationData['data']?['businessName'] ?? 'Your Business';
+
 
     if (applicantId == null || jobId == null || initialMessage == null) {
       print("Error: Missing crucial data in notification for acceptance.");
@@ -96,13 +91,13 @@ class _ChatListScreenState extends State<ChatListScreen> with SingleTickerProvid
         'jobId': jobId,
         'jobTitle': jobTitle,
         'businessName': businessName,
-        'applicantName': applicantName,
+        'applicantName': applicantName, // Storing applicant name in chat for convenience
         'ownerId': ownerUid,
         'applicantId': applicantId,
         'lastMessage': initialMessage,
         'lastMessageTime': FieldValue.serverTimestamp(),
-        'lastSenderId': applicantId,
-        'unreadCount': 0, // Set to 0 since we're opening the chat
+        'lastSenderId': applicantId, // Initial message is from applicant
+        'unreadCount': 1, // Owner is creating it, applicant hasn't seen it yet in this new chat
         'createdAt': FieldValue.serverTimestamp(),
         'status': 'active',
       });
@@ -113,25 +108,11 @@ class _ChatListScreenState extends State<ChatListScreen> with SingleTickerProvid
         'text': initialMessage,
         'senderId': applicantId,
         'timestamp': FieldValue.serverTimestamp(),
-        'isRead': true, // Mark as read since owner is accepting
+        'isRead': false, // Owner has "read" the application, but this is the first message in chat
         'senderName': applicantName,
       });
 
-      // 3. Delete the user_messages document (remove from pending)
-      final userMessagesQuery = await FirebaseFirestore.instance
-          .collection('user_messages')
-          .where('userId', isEqualTo: applicantId)
-          .where('ownerId', isEqualTo: ownerUid) // Use root level ownerId
-          .where('data.jobId', isEqualTo: jobId)
-          .where('status', isEqualTo: 'pending')
-          .limit(1)
-          .get();
-
-      if (userMessagesQuery.docs.isNotEmpty) {
-        batch.delete(userMessagesQuery.docs.first.reference);
-      }
-
-      // 4. Delete the notification
+      // 3. Delete the notification (user_messages logic removed)
       DocumentReference notificationRefDoc = FirebaseFirestore.instance
           .collection('notifications').doc(notificationId);
       batch.delete(notificationRefDoc);
@@ -167,14 +148,16 @@ class _ChatListScreenState extends State<ChatListScreen> with SingleTickerProvid
       String notificationId) async {
     final applicantId = originalNotificationData['senderId'] as String?;
     final jobId = originalNotificationData['data']?['jobId'] as String?;
+    final jobTitle = originalNotificationData['data']?['jobTitle'] as String?;
+    final businessName = originalNotificationData['data']?['businessName'] as String?;
     final ownerUid = currentUser!.uid;
 
-    if (applicantId == null || jobId == null) {
-      print("Error: Missing crucial data in notification for rejection.");
+    if (applicantId == null || jobId == null || jobTitle == null || businessName == null) {
+      print("Error: Missing crucial data in notification for rejection feedback.");
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-              content: Text('Error processing rejection: key data missing.')),
+              content: Text('Error processing rejection: key data missing for feedback.')),
         );
       }
       return;
@@ -183,27 +166,22 @@ class _ChatListScreenState extends State<ChatListScreen> with SingleTickerProvid
     try {
       WriteBatch batch = FirebaseFirestore.instance.batch();
 
-      // 1. Update the user_messages status to 'rejected'
-      final userMessagesQuery = await FirebaseFirestore.instance
-          .collection('user_messages')
-          .where('userId', isEqualTo: applicantId)
-          .where('ownerId', isEqualTo: ownerUid) // Use root level ownerId
-          .where('data.jobId', isEqualTo: jobId)
-          .where('status', isEqualTo: 'pending')
-          .limit(1)
-          .get();
+      // 1. Create a "declined" feedback document for the user
+      // Using a combination of applicantId and jobId for document ID to make it somewhat unique per application
+      // Or generate a new unique ID:
+      DocumentReference feedbackRef = FirebaseFirestore.instance.collection('userApplicationFeedback').doc();
+      batch.set(feedbackRef, {
+        'userId': applicantId, // The applicant who this feedback is for
+        'ownerId': ownerUid,   // The owner who rejected
+        'jobId': jobId,
+        'jobTitle': jobTitle,
+        'businessName': businessName,
+        'status': 'declined',
+        'timestamp': FieldValue.serverTimestamp(),
+        'originalNotificationId': notificationId, // For reference
+      });
 
-      if (userMessagesQuery.docs.isNotEmpty) {
-        batch.update(userMessagesQuery.docs.first.reference, {
-          'status': 'rejected',
-          'rejectedAt': FieldValue.serverTimestamp(),
-        });
-      } else {
-        print(
-            "Warning: Could not find corresponding user_message to mark as rejected for applicant $applicantId, job $jobId");
-      }
-
-      // 2. Delete the notification
+      // 2. Delete the notification (user_messages logic removed)
       DocumentReference notificationRefDoc = FirebaseFirestore.instance
           .collection('notifications').doc(notificationId);
       batch.delete(notificationRefDoc);
@@ -212,7 +190,7 @@ class _ChatListScreenState extends State<ChatListScreen> with SingleTickerProvid
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Application rejected')),
+          const SnackBar(content: Text('Application rejected. Feedback sent to user.')),
         );
       }
     } catch (e) {
@@ -284,9 +262,11 @@ class _ChatListScreenState extends State<ChatListScreen> with SingleTickerProvid
     }
 
     if (!isBusinessOwner) {
-      return const UserChatListScreen();
+      // If not a business owner, show the UserChatListScreen instead
+      return const UserChatListScreen(); // Make sure UserChatListScreen handles its own loading and auth checks
     }
 
+    // Business Owner UI
     return Scaffold(
       appBar: AppBar(
         title: const Text('My Applicants'),
@@ -303,32 +283,37 @@ class _ChatListScreenState extends State<ChatListScreen> with SingleTickerProvid
       body: TabBarView(
         controller: _tabController,
         children: [
-          _buildUnreadMessages(),
-          _buildReadMessages(),
+          _buildUnreadMessages(), // Owner's view of incoming applications from notifications
+          _buildReadMessages(),   // Owner's view of active chats
         ],
       ),
     );
   }
 
   Widget _buildUnreadMessages() {
-    if (!isBusinessOwner) {
+    // This is for the Business Owner to see incoming application messages (notifications)
+    if (!isBusinessOwner) { // Should not happen due to build method logic, but good for safety
       return const Center(child: Text("Access denied."));
     }
 
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
           .collection('notifications')
-          .where('userId', isEqualTo: currentUser?.uid)
+          .where('userId', isEqualTo: currentUser?.uid) // Notifications where owner is the recipient
           .where('type', isEqualTo: 'message')
           .orderBy('timestamp', descending: true)
           .snapshots(),
       builder: (context, snapshot) {
+        // ... (Your existing UI logic for displaying unread messages is good)
+        // Make sure this UI correctly passes `data` (originalNotificationData)
+        // and `notification.id` (notificationId) to _acceptMessage and _rejectMessage.
+        // Your existing code for this part looks fine.
+
         print("DEBUG: Unread messages stream - ConnectionState: ${snapshot.connectionState}");
         print("DEBUG: Has data: ${snapshot.hasData}, Has error: ${snapshot.hasError}");
 
         if (snapshot.hasError) {
           print("ERROR in unread messages: ${snapshot.error}");
-          // Check if it's an index error
           if (snapshot.error.toString().contains('index')) {
             return Center(
               child: Padding(
@@ -341,10 +326,12 @@ class _ChatListScreenState extends State<ChatListScreen> with SingleTickerProvid
                     const Text('Database index required'),
                     const SizedBox(height: 8),
                     Text(
-                      'Please create an index for:\nnotifications -> userId + type + timestamp',
+                      'Please create an index for:\nnotifications -> userId + type + timestamp (descending)',
                       textAlign: TextAlign.center,
                       style: TextStyle(color: Colors.grey[600]),
                     ),
+                    const SizedBox(height: 8),
+                    Text('Error details: ${snapshot.error}', style: TextStyle(fontSize: 12, color: Colors.red[300])),
                   ],
                 ),
               ),
@@ -353,7 +340,6 @@ class _ChatListScreenState extends State<ChatListScreen> with SingleTickerProvid
           return Center(child: Text('Error: ${snapshot.error}'));
         }
 
-        // Update the count
         if (snapshot.hasData) {
           final newCount = snapshot.data!.docs.length;
           if (_unreadMessagesCount != newCount) {
@@ -475,6 +461,7 @@ class _ChatListScreenState extends State<ChatListScreen> with SingleTickerProvid
   }
 
   Widget _buildReadMessages() {
+    // This is for the Business Owner to see their active chats
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
           .collection('chats')
@@ -482,6 +469,8 @@ class _ChatListScreenState extends State<ChatListScreen> with SingleTickerProvid
           .orderBy('lastMessageTime', descending: true)
           .snapshots(),
       builder: (context, snapshot) {
+        // ... (Your existing UI logic for displaying active chats is good)
+        // This part seems fine and correctly uses the 'chats' collection.
         if (snapshot.hasError) {
           return Center(child: Text('Error: ${snapshot.error}'));
         }
@@ -502,8 +491,8 @@ class _ChatListScreenState extends State<ChatListScreen> with SingleTickerProvid
 
             final lastMessage = data['lastMessage'] as String? ?? '';
             final jobTitle = data['jobTitle'] as String? ?? 'Job Chat';
-            final applicantName = data['applicantName'] as String? ??
-                'Applicant';
+            // In chats, you stored applicantName directly if it exists
+            final otherPartyName = data['applicantName'] as String? ?? 'Applicant';
             final lastSenderId = data['lastSenderId'] as String?;
             final lastMessageTime = (data['lastMessageTime'] as Timestamp?)
                 ?.toDate();
@@ -536,7 +525,7 @@ class _ChatListScreenState extends State<ChatListScreen> with SingleTickerProvid
                         backgroundColor: hasUnreadMessages
                             ? Colors.blue
                             : Colors.grey,
-                        child: Text(applicantName.isNotEmpty ? applicantName[0]
+                        child: Text(otherPartyName.isNotEmpty ? otherPartyName[0]
                             .toUpperCase() : jobTitle[0].toUpperCase()),
                       ),
                       if (hasUnreadMessages)
@@ -574,7 +563,7 @@ class _ChatListScreenState extends State<ChatListScreen> with SingleTickerProvid
                         children: [
                           Expanded(
                             child: Text(
-                              applicantName,
+                              otherPartyName, // Displaying Applicant's name
                               style: const TextStyle(
                                   fontWeight: FontWeight.bold),
                               overflow: TextOverflow.ellipsis,
@@ -590,7 +579,7 @@ class _ChatListScreenState extends State<ChatListScreen> with SingleTickerProvid
                             ),
                         ],
                       ),
-                      Text(
+                      Text( // Sub-line can be the job title
                         jobTitle,
                         style: TextStyle(
                           fontSize: 12,
@@ -606,8 +595,8 @@ class _ChatListScreenState extends State<ChatListScreen> with SingleTickerProvid
                         if (isLastMessageMine)
                           Padding(
                             padding: const EdgeInsets.only(right: 4.0),
-                            child: Icon(
-                              Icons.done_all,
+                            child: Icon( // Consider using Icons.done_all if message is read by other party
+                              Icons.done,
                               size: 16,
                               color: Colors.grey[600],
                             ),
