@@ -142,36 +142,44 @@ class _ApplicationManagerScreenState extends State<ApplicationManagerScreen> {
               final timestamp = (data['timestamp'] as Timestamp?)?.toDate();
 
               if (type == 'message') {
-                // Simple message notification
                 return Card(
                   margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  child: ListTile(
-                    leading: CircleAvatar(
-                      backgroundColor: Colors.blue,
-                      child: const Icon(Icons.message, color: Colors.white),
-                    ),
-                    title: Text(
-                      'New message from ${data['data']['applicantName'] ?? 'someone'}',
-                      style: const TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                    subtitle: Text(
-                      'Regarding: ${data['data']['jobTitle'] ?? 'your job posting'}',
-                      style: TextStyle(color: Colors.grey[600]),
-                    ),
-                    trailing: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.end,
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          _getTimeAgo(timestamp),
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.grey[600],
+                        CircleAvatar(
+                          backgroundColor: Colors.blue,
+                          child: const Icon(Icons.message, color: Colors.white),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'New message from ${data['data']['applicantName'] ?? 'someone'}',
+                                style: const TextStyle(fontWeight: FontWeight.bold),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                'Regarding: ${data['data']['jobTitle'] ?? 'your job posting'}',
+                                style: TextStyle(color: Colors.grey[600]),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                _getTimeAgo(timestamp),
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.grey[600],
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                        const SizedBox(height: 4),
                         IconButton(
-                          icon: const Icon(Icons.delete_outline, size: 20),
+                          icon: const Icon(Icons.delete_outline),
                           onPressed: () => _deleteNotification(notification.id),
                           tooltip: 'Delete',
                         ),

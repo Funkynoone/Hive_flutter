@@ -240,6 +240,7 @@ class _UserChatListScreenState extends State<UserChatListScreen> with SingleTick
         controller: _tabController,
         children: [
           // Pending Messages
+          // In the Pending Messages StreamBuilder
           StreamBuilder<QuerySnapshot>(
             stream: FirebaseFirestore.instance
                 .collection('user_messages')
@@ -248,26 +249,49 @@ class _UserChatListScreenState extends State<UserChatListScreen> with SingleTick
                 .orderBy('timestamp', descending: true)
                 .snapshots(),
             builder: (context, snapshot) {
-              final logPrefix = "[${DateTime.now()}] PENDING TAB (${currentUser!.uid}) -";
-              print("$logPrefix ConnectionState: ${snapshot.connectionState}, HasData: ${snapshot.hasData}, HasError: ${snapshot.hasError}");
+              final logPrefix = "[PENDING-DEBUG ${DateTime.now().toIso8601String()}] (${currentUser!.uid}) -";
+
+              print("$logPrefix Stream state: ${snapshot.connectionState}");
+              print("$logPrefix Has data: ${snapshot.hasData}");
+              print("$logPrefix Has error: ${snapshot.hasError}");
 
               if (snapshot.hasError) {
-                print("$logPrefix Error: ${snapshot.error}");
-                print("$logPrefix StackTrace: ${snapshot.stackTrace}");
-                return Center(child: Text('Error loading pending: ${snapshot.error}. Check logs.'));
+                print("$logPrefix ERROR: ${snapshot.error}");
+                print("$logPrefix Stack: ${snapshot.stackTrace}");
+                return Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.error_outline, size: 48, color: Colors.red),
+                      const SizedBox(height: 16),
+                      Text('Error: ${snapshot.error}'),
+                      const SizedBox(height: 8),
+                      ElevatedButton(
+                        onPressed: () {
+                          setState(() {});
+                        },
+                        child: const Text('Retry'),
+                      ),
+                    ],
+                  ),
+                );
               }
 
               if (snapshot.connectionState == ConnectionState.waiting) {
-                print("$logPrefix Still waiting for data...");
+                print("$logPrefix Waiting for data...");
                 return const Center(child: CircularProgressIndicator());
               }
 
               int newCount = 0;
-              if (snapshot.hasData && snapshot.data!.docs.isNotEmpty) {
+              if (snapshot.hasData) {
                 newCount = snapshot.data!.docs.length;
-                print("$logPrefix Data received: $newCount items.");
-              } else {
-                print("$logPrefix No data or empty docs. ConnectionState: ${snapshot.connectionState}");
+                print("$logPrefix Data received: $newCount documents");
+
+                // Log each document for debugging
+                for (var doc in snapshot.data!.docs) {
+                  final data = doc.data() as Map<String, dynamic>;
+                  print("$logPrefix Doc ${doc.id}: status=${data['status']}, message=${data['message']?.substring(0, 20)}...");
+                }
               }
 
               if (_pendingCount != newCount) {
@@ -277,6 +301,7 @@ class _UserChatListScreenState extends State<UserChatListScreen> with SingleTick
               }
 
               if (newCount == 0) {
+                print("$logPrefix No pending messages");
                 return const Center(child: Text('No pending messages'));
               }
 

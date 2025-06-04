@@ -54,17 +54,10 @@ class _MapFilterScreenState extends State<MapFilterScreen>
       curve: Curves.easeInOut,
     );
 
-    // DEBUG PRINT: Check initial jobs provided
-    print('MapFilterScreen: Initializing with ${widget.initialJobs?.length ?? 0} jobs.');
-
     // Initialize with all jobs
     filteredJobs = widget.initialJobs ?? [];
-    // DEBUG PRINT: Check filteredJobs count after initState
-    print('MapFilterScreen: After initState, filteredJobs count: ${filteredJobs.length}');
 
     _groupJobsByRestaurant(filteredJobs);
-    // DEBUG PRINT: Check restaurantGroups count after initial grouping
-    print('MapFilterScreen: After initial grouping, restaurantGroups count: ${restaurantGroups.length}');
 
 
     // Add filter listener
@@ -108,9 +101,6 @@ class _MapFilterScreenState extends State<MapFilterScreen>
     setState(() {
       filteredJobs = newFilteredJobs;
       _groupJobsByRestaurant(filteredJobs);
-      // DEBUG PRINT: Check filteredJobs count after applying filters
-      print('MapFilterScreen: After applying filters, filteredJobs count: ${filteredJobs.length}');
-      print('MapFilterScreen: After applying filters and grouping, restaurantGroups count: ${restaurantGroups.length}');
     });
   }
 
@@ -119,7 +109,6 @@ class _MapFilterScreenState extends State<MapFilterScreen>
     for (var job in jobs) {
       // Ensure latitude and longitude are valid numbers
       if (job.latitude.isNaN || job.longitude.isNaN) {
-        print('MapFilterScreen: Skipping job with invalid coordinates: ${job.title}');
         continue;
       }
       final key = '${job.restaurant}_${job.latitude}_${job.longitude}';
@@ -128,7 +117,6 @@ class _MapFilterScreenState extends State<MapFilterScreen>
   }
 
   void _handleMarkerTap(Job job, {bool showSheet = true}) {
-    print("Selected job details - Title: ${job.title}, Restaurant: ${job.restaurant}");
     setState(() {
       selectedJob = job;
       selectedClusterJobs = null;
@@ -151,7 +139,6 @@ class _MapFilterScreenState extends State<MapFilterScreen>
   }
 
   void _handleClusterTap(List<Marker> markers, LatLng center) {
-    print("MapFilterScreen: Raw markers in cluster tap: ${markers.length}");
 
     final Map<String, Job> uniqueJobs = {};
     for (var marker in markers) {
@@ -164,7 +151,6 @@ class _MapFilterScreenState extends State<MapFilterScreen>
               (job) => job.latitude == marker.point.latitude &&
               job.longitude == marker.point.longitude
       ).toList();
-      print("MapFilterScreen: Found ${jobsAtLocation.length} jobs at marker point: ${marker.point}");
 
       for (var job in jobsAtLocation) {
         uniqueJobs[job.id] = job;
@@ -172,7 +158,6 @@ class _MapFilterScreenState extends State<MapFilterScreen>
     }
 
     final jobs = uniqueJobs.values.toList();
-    print("MapFilterScreen: Total unique jobs in cluster: ${jobs.length}");
 
     // Check if all jobs are from the same restaurant
     final sameOwner = jobs.isNotEmpty &&
@@ -189,7 +174,6 @@ class _MapFilterScreenState extends State<MapFilterScreen>
         _radialMenuPosition = Offset(screenPoint.x.toDouble(), screenPoint.y.toDouble());
         selectedJob = null;
         showClusterDetails = false;
-        print("MapFilterScreen: Showing radial menu for cluster at $center");
       });
       return;
     }
@@ -207,16 +191,13 @@ class _MapFilterScreenState extends State<MapFilterScreen>
         showClusterDetails = true;
         isFullDetails = false;
         _animationController.forward(from: 0.0);
-        print("MapFilterScreen: Showing cluster details sheet for cluster at $center");
       });
     } else {
       mapController.move(center, newZoom);
-      print("MapFilterScreen: Zooming to cluster center: $center with zoom: $newZoom");
     }
   }
 
   void _handleMapTap(TapPosition tapPosition, LatLng point) {
-    print("MapFilterScreen: Map tapped at $point");
     setState(() {
       selectedJob = null;
       selectedClusterJobs = null;
@@ -315,23 +296,17 @@ class _MapFilterScreenState extends State<MapFilterScreen>
   List<Marker> _buildMarkers() {
     final List<Marker> markers = [];
 
-    // DEBUG PRINT: Confirm _buildMarkers is actively building
-    print('MapFilterScreen: _buildMarkers function called. restaurantGroups count: ${restaurantGroups.length}');
 
     // Create markers for each restaurant group
     restaurantGroups.forEach((key, jobs) {
       if (jobs.isEmpty) {
-        print('MapFilterScreen: Encountered empty job list for group key: $key');
         return;
       }
 
       final firstJob = jobs.first;
-      // DEBUG PRINT: Check job coordinates
-      print('MapFilterScreen: Processing job group for ${firstJob.restaurant} at Lat: ${firstJob.latitude}, Lng: ${firstJob.longitude}');
 
       // Ensure valid coordinates before creating LatLng
       if (firstJob.latitude.isNaN || firstJob.longitude.isNaN) {
-        print('MapFilterScreen: Invalid coordinates for job: ${firstJob.title}. Skipping marker creation.');
         return;
       }
 
@@ -344,7 +319,6 @@ class _MapFilterScreenState extends State<MapFilterScreen>
           height: 40,
           child: GestureDetector(
             onTap: () {
-              print('MapFilterScreen: Marker tapped for job: ${firstJob.title}');
               if (jobs.length == 1) {
                 _handleMarkerTap(firstJob);
               } else {
@@ -355,7 +329,6 @@ class _MapFilterScreenState extends State<MapFilterScreen>
                   final screenPoint = mapController.latLngToScreenPoint(point);
                   _radialMenuPosition = Offset(screenPoint.x.toDouble(), screenPoint.y.toDouble());
                   selectedJob = null;
-                  print('MapFilterScreen: Showing radial menu for ${jobs.length} jobs at tapped marker.');
                 });
               }
             },
@@ -380,8 +353,6 @@ class _MapFilterScreenState extends State<MapFilterScreen>
         ),
       );
     });
-    // DEBUG PRINT: Total markers built
-    print('MapFilterScreen: _buildMarkers function completed. Total markers added: ${markers.length}');
     return markers;
   }
 
@@ -394,8 +365,6 @@ class _MapFilterScreenState extends State<MapFilterScreen>
   }
 
   Widget _buildSingleJobMarker(Job job) {
-    // DEBUG PRINT: Building single job marker for ${job.title}
-    print('MapFilterScreen: Building single job marker for ${job.title}');
     final color = JobMarkerUtils.getJobColor(job.category);
     final icon = JobMarkerUtils.getJobIcon(job.category);
 
@@ -425,8 +394,6 @@ class _MapFilterScreenState extends State<MapFilterScreen>
   }
 
   Widget _buildGroupedJobMarker(List<Job> jobs) {
-    // DEBUG PRINT: Building grouped job marker for ${jobs.length} jobs
-    print('MapFilterScreen: Building grouped job marker for ${jobs.length} jobs');
 
     final primaryColor = JobMarkerUtils.getJobColor(jobs.first.category);
 
@@ -489,8 +456,6 @@ class _MapFilterScreenState extends State<MapFilterScreen>
   }
 
   Widget _buildCluster(BuildContext context, List<Marker> markers) {
-    // DEBUG PRINT: Building cluster icon for ${markers.length} markers
-    print('MapFilterScreen: Building cluster icon for ${markers.length} markers');
     return Container(
       decoration: BoxDecoration(
         color: Colors.blue.shade600,

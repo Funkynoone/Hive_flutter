@@ -206,100 +206,136 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
   }
 
   Future<void> _sendApplication(String message) async {
-    if (!mounted) return; // Check if mounted at the beginning
+    print("🔵 DEBUG: Starting _sendApplication");
+    print("🔵 DEBUG: Message: $message");
+    print("🔵 DEBUG: Job ID: ${widget.job.id}");
+    print("🔵 DEBUG: Owner ID: ${widget.job.ownerId}");
+
+    if (!mounted) {
+      print("🔴 DEBUG: Widget not mounted, returning early");
+      return;
+    }
+
     setState(() => _isSending = true);
+
     try {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) {
-        if (mounted) { // Check mounted before showing SnackBar
+        print("🔴 DEBUG: No user logged in");
+        if (mounted) {
+          setState(() => _isSending = false);
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Please login to apply')),
+            const SnackBar(
+              content: Text('Please login to apply'),
+              backgroundColor: Colors.red,
+            ),
           );
         }
-        // No need to call setState here if already returning
-        // setState(() => _isSending = false); // This was potentially problematic
-        return; // Return early
+        return;
       }
+
+      print("🔵 DEBUG: Current user ID: ${user.uid}");
 
       final userDataSnapshot = await FirebaseFirestore.instance
           .collection('users')
           .doc(user.uid)
           .get();
 
-      if (!mounted) return; // Check mounted after await
+      if (!mounted) {
+        print("🔴 DEBUG: Widget unmounted after getting user data");
+        return;
+      }
 
       final applicantName = userDataSnapshot.data()?['username'] ?? 'Anonymous Applicant';
+      print("🔵 DEBUG: Applicant name: $applicantName");
 
       final WriteBatch batch = FirebaseFirestore.instance.batch();
 
-      // 1. Create the application in JobListings subcollection
-      final applicationRef = FirebaseFirestore.instance
-          .collection('JobListings')
-          .doc(widget.job.id)
-          .collection('Applications')
-          .doc(); // Auto-generate ID
-      batch.set(applicationRef, {
-        'userId': user.uid,
-        'name': applicantName,
-        'message': message,
-        'status': 'pending', // This status is for the owner's view of applications
-        'timestamp': FieldValue.serverTimestamp(),
-        'type': 'message', // Differentiate message application
-      });
-
-      // 2. Create notification for the owner
+      // 1. Create notification for the owner
       final notificationRef = FirebaseFirestore.instance.collection('notifications').doc();
-      batch.set(notificationRef, {
-        'userId': widget.job.ownerId, // Owner who receives notification
-        'senderId': user.uid, // User who sent it
-        'title': 'New Message for ${widget.job.title}',
-        'message': message, // The actual message content
-        'type': 'message_application', // More specific type
+      print("🔵 DEBUG: Creating notification with ID: ${notificationRef.id}");
+
+      final notificationData = {
+        'userId': widget.job.ownerId,
+        'senderId': user.uid,
+        'type': 'message',
+        'message': message,
         'data': {
           'jobId': widget.job.id,
           'jobTitle': widget.job.title,
           'businessName': widget.job.restaurant,
           'applicantName': applicantName,
-          'applicationId': applicationRef.id, // Link to the application document
         },
         'timestamp': FieldValue.serverTimestamp(),
         'isRead': false,
-      });
+      };
 
-      // 3. Create message in user_messages for the applicant (for their Pending tab)
-      final userMessageRef = FirebaseFirestore.instance.collection('user_messages').doc(); // Auto-ID or custom
-      batch.set(userMessageRef, {
-        'userId': user.uid, // The applicant themselves
+      print("🔵 DEBUG: Notification data: $notificationData");
+      batch.set(notificationRef, notificationData);
+
+      // 2. Create message in user_messages
+      final userMessageRef = FirebaseFirestore.instance.collection('user_messages').doc();
+      print("🔵 DEBUG: Creating user_message with ID: ${userMessageRef.id}");
+
+      final userMessageData = {
+        'userId': user.uid,
+        'ownerId': widget.job.ownerId,
         'status': 'pending',
-        'message': message, // The message content
-        'data': { // Data expected by UserChatListScreen's _buildMessageCard
+        'message': message,
+        'data': {
           'jobTitle': widget.job.title,
           'businessName': widget.job.restaurant,
-          'jobId': widget.job.id, // For linking with owner's actions
-          'ownerId': widget.job.ownerId, // For reference
-          'applicationType': 'message',
-          'applicationId': applicationRef.id, // Link to the application document
+          'jobId': widget.job.id,
+          'ownerId': widget.job.ownerId,
         },
         'timestamp': FieldValue.serverTimestamp(),
-      });
+      };
 
+      print("🔵 DEBUG: User message data: $userMessageData");
+      batch.set(userMessageRef, userMessageData);
+
+      print("🔵 DEBUG: Committing batch...");
       await batch.commit();
+      print("✅ DEBUG: Batch committed successfully");
 
-      if (mounted) { // Check mounted before showing SnackBar
+      if (mounted) {
+        setState(() => _isSending = false);
+
+        // Show success message
+        ScaffoldMessenger.of(context).removeCurrentSnackBar();
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Message sent successfully!')),
+          const SnackBar(
+            content: Text(
+              'Message sent successfully!',
+              style: TextStyle(color: Colors.white),
+            ),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 3),
+            behavior: SnackBarBehavior.floating,
+            margin: EdgeInsets.all(10),
+          ),
         );
+
+        print("✅ DEBUG: SnackBar should be showing now");
+
+        // Navigate back after a short delay
+        Future.delayed(const Duration(seconds: 1), () {
+          if (mounted) {
+            Navigator.pop(context);
+          }
+        });
       }
     } catch (e) {
-      print('Error sending message: $e');
-      if (mounted) { // Check mounted before showing SnackBar
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error sending message: ${e.toString()}')),
-        );
-      }
-    } finally {
-      if (mounted) { // Check mounted before calling setState
+      print("🔴 ERROR in _sendApplication: $e");
+      print("🔴 ERROR Stack trace: ${StackTrace.current}");
+      if (mounted) {
         setState(() => _isSending = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
       }
     }
   }
@@ -308,7 +344,8 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
     final messageController = TextEditingController();
     showDialog(
       context: context,
-      builder: (contextDialog) => AlertDialog( // Renamed context to contextDialog
+      barrierDismissible: false, // Prevent accidental dismissal
+      builder: (dialogContext) => AlertDialog(
         title: const Text('Send Message to Owner'),
         content: TextField(
           controller: messageController,
@@ -321,24 +358,30 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(contextDialog),
+            onPressed: () => Navigator.pop(dialogContext),
             child: const Text('Cancel'),
           ),
           ElevatedButton(
-            onPressed: () {
+            onPressed: () async {
               if (messageController.text.trim().isNotEmpty) {
-                // It's generally safer to pop the dialog *after* the async operation might start,
-                // or ensure the async operation checks for `mounted` if it interacts with the dialog's context.
-                // However, since _sendApplication handles its own mounted checks for UI updates,
-                // popping here is okay.
                 final messageToSend = messageController.text.trim();
-                Navigator.pop(contextDialog); // Pop the dialog first
-                _sendApplication(messageToSend);
+
+                // Close dialog first
+                Navigator.pop(dialogContext);
+
+                // Add a small delay to ensure dialog is closed
+                await Future.delayed(const Duration(milliseconds: 100));
+
+                // Send the message
+                await _sendApplication(messageToSend);
               } else {
-                // Check if contextDialog is still valid if it were used for ScaffoldMessenger
-                // For this simple SnackBar, using the main screen's context is fine if dialog is popped.
-                ScaffoldMessenger.of(context).showSnackBar( // Using the main context after dialog pop
-                    const SnackBar(content: Text('Message cannot be empty.'), duration: Duration(seconds: 2),)
+                // Show error in dialog context
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Message cannot be empty.'),
+                    duration: Duration(seconds: 2),
+                    backgroundColor: Colors.orange,
+                  ),
                 );
               }
             },

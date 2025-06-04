@@ -40,14 +40,16 @@ class _ChatListScreenState extends State<ChatListScreen> with SingleTickerProvid
           .collection('users')
           .doc(user.uid)
           .get();
-      if(mounted){
+      if (mounted) {
         setState(() {
-          isBusinessOwner = docSnapshot.exists ? (docSnapshot.data()?['isBusinessOwner'] ?? false) : false;
+          isBusinessOwner = docSnapshot.exists
+              ? (docSnapshot.data()?['isBusinessOwner'] ?? false)
+              : false;
           _isLoading = false;
         });
       }
     } else {
-      if(mounted){
+      if (mounted) {
         setState(() {
           _isLoading = false;
         });
@@ -55,13 +57,19 @@ class _ChatListScreenState extends State<ChatListScreen> with SingleTickerProvid
     }
   }
 
-  Future<void> _acceptMessage(Map<String, dynamic> originalNotificationData, String notificationId) async {
+  Future<void> _acceptMessage(Map<String, dynamic> originalNotificationData,
+      String notificationId) async {
     final ownerUid = currentUser!.uid;
     final applicantId = originalNotificationData['senderId'] as String?;
     final jobId = originalNotificationData['data']?['jobId'] as String?;
-    final jobTitle = originalNotificationData['data']?['jobTitle'] ?? 'Job Chat';
-    final businessData = await FirebaseFirestore.instance.collection('users').doc(ownerUid).get();
-    final businessName = businessData.data()?['businessProfile']?['businessName'] ?? originalNotificationData['data']?['businessName'] ?? 'Your Business';
+    final jobTitle = originalNotificationData['data']?['jobTitle'] ??
+        'Job Chat';
+    final businessData = await FirebaseFirestore.instance.collection('users')
+        .doc(ownerUid)
+        .get();
+    final businessName = businessData
+        .data()?['businessProfile']?['businessName'] ??
+        originalNotificationData['data']?['businessName'] ?? 'Your Business';
     final initialMessage = originalNotificationData['message'] as String?;
     final applicantName = originalNotificationData['data']?['applicantName'] as String?;
 
@@ -69,7 +77,8 @@ class _ChatListScreenState extends State<ChatListScreen> with SingleTickerProvid
       print("Error: Missing crucial data in notification for acceptance.");
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Error processing acceptance: key data missing.')),
+          const SnackBar(
+              content: Text('Error processing acceptance: key data missing.')),
         );
       }
       return;
@@ -79,7 +88,9 @@ class _ChatListScreenState extends State<ChatListScreen> with SingleTickerProvid
       final String chatRoomId = '${ownerUid}_${applicantId}_${jobId}';
       WriteBatch batch = FirebaseFirestore.instance.batch();
 
-      DocumentReference chatRef = FirebaseFirestore.instance.collection('chats').doc(chatRoomId);
+      // 1. Create the chat room
+      DocumentReference chatRef = FirebaseFirestore.instance.collection('chats')
+          .doc(chatRoomId);
       batch.set(chatRef, {
         'participants': [ownerUid, applicantId],
         'jobId': jobId,
@@ -91,23 +102,26 @@ class _ChatListScreenState extends State<ChatListScreen> with SingleTickerProvid
         'lastMessage': initialMessage,
         'lastMessageTime': FieldValue.serverTimestamp(),
         'lastSenderId': applicantId,
-        'unreadCount': 1,
+        'unreadCount': 0, // Set to 0 since we're opening the chat
         'createdAt': FieldValue.serverTimestamp(),
         'status': 'active',
       });
 
+      // 2. Add the initial message to the chat
       DocumentReference messageRef = chatRef.collection('messages').doc();
       batch.set(messageRef, {
         'text': initialMessage,
         'senderId': applicantId,
         'timestamp': FieldValue.serverTimestamp(),
-        'isRead': false,
+        'isRead': true, // Mark as read since owner is accepting
         'senderName': applicantName,
       });
 
+      // 3. Delete the user_messages document (remove from pending)
       final userMessagesQuery = await FirebaseFirestore.instance
           .collection('user_messages')
           .where('userId', isEqualTo: applicantId)
+          .where('ownerId', isEqualTo: ownerUid) // Use root level ownerId
           .where('data.jobId', isEqualTo: jobId)
           .where('status', isEqualTo: 'pending')
           .limit(1)
@@ -117,7 +131,9 @@ class _ChatListScreenState extends State<ChatListScreen> with SingleTickerProvid
         batch.delete(userMessagesQuery.docs.first.reference);
       }
 
-      DocumentReference notificationRefDoc = FirebaseFirestore.instance.collection('notifications').doc(notificationId);
+      // 4. Delete the notification
+      DocumentReference notificationRefDoc = FirebaseFirestore.instance
+          .collection('notifications').doc(notificationId);
       batch.delete(notificationRefDoc);
 
       await batch.commit();
@@ -129,10 +145,11 @@ class _ChatListScreenState extends State<ChatListScreen> with SingleTickerProvid
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (context) => ChatScreen(
-              chatRoomId: chatRoomId,
-              jobTitle: jobTitle,
-            ),
+            builder: (context) =>
+                ChatScreen(
+                  chatRoomId: chatRoomId,
+                  jobTitle: jobTitle,
+                ),
           ),
         );
       }
@@ -146,15 +163,18 @@ class _ChatListScreenState extends State<ChatListScreen> with SingleTickerProvid
     }
   }
 
-  Future<void> _rejectMessage(Map<String, dynamic> originalNotificationData, String notificationId) async {
+  Future<void> _rejectMessage(Map<String, dynamic> originalNotificationData,
+      String notificationId) async {
     final applicantId = originalNotificationData['senderId'] as String?;
     final jobId = originalNotificationData['data']?['jobId'] as String?;
+    final ownerUid = currentUser!.uid;
 
     if (applicantId == null || jobId == null) {
       print("Error: Missing crucial data in notification for rejection.");
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Error processing rejection: key data missing.')),
+          const SnackBar(
+              content: Text('Error processing rejection: key data missing.')),
         );
       }
       return;
@@ -163,9 +183,11 @@ class _ChatListScreenState extends State<ChatListScreen> with SingleTickerProvid
     try {
       WriteBatch batch = FirebaseFirestore.instance.batch();
 
+      // 1. Update the user_messages status to 'rejected'
       final userMessagesQuery = await FirebaseFirestore.instance
           .collection('user_messages')
           .where('userId', isEqualTo: applicantId)
+          .where('ownerId', isEqualTo: ownerUid) // Use root level ownerId
           .where('data.jobId', isEqualTo: jobId)
           .where('status', isEqualTo: 'pending')
           .limit(1)
@@ -174,13 +196,16 @@ class _ChatListScreenState extends State<ChatListScreen> with SingleTickerProvid
       if (userMessagesQuery.docs.isNotEmpty) {
         batch.update(userMessagesQuery.docs.first.reference, {
           'status': 'rejected',
-          'timestamp': FieldValue.serverTimestamp(),
+          'rejectedAt': FieldValue.serverTimestamp(),
         });
       } else {
-        print("Warning: Could not find corresponding user_message to mark as rejected for applicant $applicantId, job $jobId");
+        print(
+            "Warning: Could not find corresponding user_message to mark as rejected for applicant $applicantId, job $jobId");
       }
 
-      DocumentReference notificationRefDoc = FirebaseFirestore.instance.collection('notifications').doc(notificationId);
+      // 2. Delete the notification
+      DocumentReference notificationRefDoc = FirebaseFirestore.instance
+          .collection('notifications').doc(notificationId);
       batch.delete(notificationRefDoc);
 
       await batch.commit();
@@ -219,13 +244,13 @@ class _ChatListScreenState extends State<ChatListScreen> with SingleTickerProvid
           .doc(chatRoomId)
           .delete();
 
-      if(mounted){
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Chat deleted')),
         );
       }
     } catch (e) {
-      if(mounted){
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error deleting chat: $e')),
         );
@@ -270,7 +295,7 @@ class _ChatListScreenState extends State<ChatListScreen> with SingleTickerProvid
           indicatorColor: Colors.white,
           indicatorWeight: 3,
           tabs: [
-            Tab(text: 'New Applications ($_unreadMessagesCount)'),
+            Tab(text: 'Unread ($_unreadMessagesCount)'),
             Tab(text: 'Active Chats'),
           ],
         ),
@@ -298,30 +323,54 @@ class _ChatListScreenState extends State<ChatListScreen> with SingleTickerProvid
           .orderBy('timestamp', descending: true)
           .snapshots(),
       builder: (context, snapshot) {
-        if (snapshot.hasData) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (mounted) {
-              setState(() {
-                _unreadMessagesCount = snapshot.data!.docs.length;
-              });
-            }
-          });
-        } else if (snapshot.connectionState != ConnectionState.waiting && !snapshot.hasError) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (mounted) {
-              setState(() {
-                _unreadMessagesCount = 0;
-              });
-            }
-          });
-        }
+        print("DEBUG: Unread messages stream - ConnectionState: ${snapshot.connectionState}");
+        print("DEBUG: Has data: ${snapshot.hasData}, Has error: ${snapshot.hasError}");
 
         if (snapshot.hasError) {
+          print("ERROR in unread messages: ${snapshot.error}");
+          // Check if it's an index error
+          if (snapshot.error.toString().contains('index')) {
+            return Center(
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.error_outline, size: 48, color: Colors.orange),
+                    const SizedBox(height: 16),
+                    const Text('Database index required'),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Please create an index for:\nnotifications -> userId + type + timestamp',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: Colors.grey[600]),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }
           return Center(child: Text('Error: ${snapshot.error}'));
         }
+
+        // Update the count
+        if (snapshot.hasData) {
+          final newCount = snapshot.data!.docs.length;
+          if (_unreadMessagesCount != newCount) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted) {
+                setState(() {
+                  _unreadMessagesCount = newCount;
+                });
+              }
+            });
+          }
+        }
+
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
         }
+
         if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
           return const Center(child: Text('No new applications'));
         }
@@ -453,11 +502,12 @@ class _ChatListScreenState extends State<ChatListScreen> with SingleTickerProvid
 
             final lastMessage = data['lastMessage'] as String? ?? '';
             final jobTitle = data['jobTitle'] as String? ?? 'Job Chat';
-            final applicantName = data['applicantName'] as String? ?? 'Applicant';
+            final applicantName = data['applicantName'] as String? ??
+                'Applicant';
             final lastSenderId = data['lastSenderId'] as String?;
-            final lastMessageTime = (data['lastMessageTime'] as Timestamp?)?.toDate();
+            final lastMessageTime = (data['lastMessageTime'] as Timestamp?)
+                ?.toDate();
             final unreadCount = data['unreadCount'] as int? ?? 0;
-            // final participants = List<String>.from(data['participants'] ?? []); // Not strictly needed here if using lastSenderId
 
             final isLastMessageMine = lastSenderId == currentUser?.uid;
             final hasUnreadMessages = !isLastMessageMine && unreadCount > 0;
@@ -483,8 +533,11 @@ class _ChatListScreenState extends State<ChatListScreen> with SingleTickerProvid
                   leading: Stack(
                     children: [
                       CircleAvatar(
-                        backgroundColor: hasUnreadMessages ? Colors.blue : Colors.grey,
-                        child: Text(applicantName.isNotEmpty ? applicantName[0].toUpperCase() : jobTitle[0].toUpperCase()),
+                        backgroundColor: hasUnreadMessages
+                            ? Colors.blue
+                            : Colors.grey,
+                        child: Text(applicantName.isNotEmpty ? applicantName[0]
+                            .toUpperCase() : jobTitle[0].toUpperCase()),
                       ),
                       if (hasUnreadMessages)
                         Positioned(
@@ -522,7 +575,8 @@ class _ChatListScreenState extends State<ChatListScreen> with SingleTickerProvid
                           Expanded(
                             child: Text(
                               applicantName,
-                              style: const TextStyle(fontWeight: FontWeight.bold),
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.bold),
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),
@@ -545,7 +599,7 @@ class _ChatListScreenState extends State<ChatListScreen> with SingleTickerProvid
                       ),
                     ],
                   ),
-                  subtitle: Padding( // CORRECTED PADDING
+                  subtitle: Padding(
                     padding: const EdgeInsets.only(top: 4.0),
                     child: Row(
                       children: [
@@ -553,7 +607,7 @@ class _ChatListScreenState extends State<ChatListScreen> with SingleTickerProvid
                           Padding(
                             padding: const EdgeInsets.only(right: 4.0),
                             child: Icon(
-                              Icons.done_all, // Assuming you might want done_all for read by other party
+                              Icons.done_all,
                               size: 16,
                               color: Colors.grey[600],
                             ),
@@ -564,7 +618,8 @@ class _ChatListScreenState extends State<ChatListScreen> with SingleTickerProvid
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
-                              color: hasUnreadMessages ? Colors.black87 : Colors.grey[600],
+                              color: hasUnreadMessages ? Colors.black87 : Colors
+                                  .grey[600],
                             ),
                           ),
                         ),
@@ -575,10 +630,11 @@ class _ChatListScreenState extends State<ChatListScreen> with SingleTickerProvid
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (context) => ChatScreen(
-                          chatRoomId: chat.id,
-                          jobTitle: jobTitle,
-                        ),
+                        builder: (context) =>
+                            ChatScreen(
+                              chatRoomId: chat.id,
+                              jobTitle: jobTitle,
+                            ),
                       ),
                     );
                   },
