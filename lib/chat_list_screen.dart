@@ -301,8 +301,6 @@ class _ChatListScreenState extends State<ChatListScreen> with SingleTickerProvid
           .collection('notifications')
           .where('userId', isEqualTo: currentUser?.uid)
           .where('type', isEqualTo: 'message')
-          .where('isRead', isEqualTo: false) // Show only unread messages
-          .orderBy('isRead') // Add this to the compound index
           .orderBy('timestamp', descending: true)
           .snapshots(),
       builder: (context, snapshot) {
@@ -311,43 +309,7 @@ class _ChatListScreenState extends State<ChatListScreen> with SingleTickerProvid
 
         if (snapshot.hasError) {
           print("ERROR in unread messages: ${snapshot.error}");
-          if (snapshot.error.toString().contains('index')) {
-            return Center(
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(Icons.error_outline, size: 48, color: Colors.orange),
-                    const SizedBox(height: 16),
-                    const Text('Database index required'),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Please create an index for:\nnotifications -> userId + type + isRead + timestamp (descending)',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(color: Colors.grey[600]),
-                    ),
-                    const SizedBox(height: 8),
-                    Text('Error details: ${snapshot.error}', style: TextStyle(fontSize: 12, color: Colors.red[300])),
-                  ],
-                ),
-              ),
-            );
-          }
           return Center(child: Text('Error: ${snapshot.error}'));
-        }
-
-        if (snapshot.hasData) {
-          final newCount = snapshot.data!.docs.length;
-          if (_unreadMessagesCount != newCount) {
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (mounted) {
-                setState(() {
-                  _unreadMessagesCount = newCount;
-                });
-              }
-            });
-          }
         }
 
         if (snapshot.connectionState == ConnectionState.waiting) {
@@ -358,12 +320,35 @@ class _ChatListScreenState extends State<ChatListScreen> with SingleTickerProvid
           return const Center(child: Text('No new applications'));
         }
 
-        final messageDocs = snapshot.data!.docs;
+        // Filter for unprocessed messages (no status field or null status)
+        final unprocessedMessages = snapshot.data!.docs.where((doc) {
+          final data = doc.data() as Map<String, dynamic>;
+          // Show only messages that haven't been processed (no status or null status)
+          return !data.containsKey('status') || data['status'] == null;
+        }).toList();
+
+        print("DEBUG: Total notifications: ${snapshot.data!.docs.length}, Unprocessed: ${unprocessedMessages.length}");
+
+        // Update count
+        final newCount = unprocessedMessages.length;
+        if (_unreadMessagesCount != newCount) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) {
+              setState(() {
+                _unreadMessagesCount = newCount;
+              });
+            }
+          });
+        }
+
+        if (unprocessedMessages.isEmpty) {
+          return const Center(child: Text('No new applications'));
+        }
 
         return ListView.builder(
-          itemCount: messageDocs.length,
+          itemCount: unprocessedMessages.length,
           itemBuilder: (context, index) {
-            final notification = messageDocs[index];
+            final notification = unprocessedMessages[index];
             final data = notification.data() as Map<String, dynamic>;
 
             return Card(
