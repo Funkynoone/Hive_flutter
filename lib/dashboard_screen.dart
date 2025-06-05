@@ -7,8 +7,6 @@ import 'package:hive_flutter/add_job_screen.dart';
 import 'package:hive_flutter/saved_jobs_screen.dart';
 import 'package:hive_flutter/application_manager_screen.dart';
 import 'package:hive_flutter/user_applications_screen.dart';
-import 'package:hive_flutter/models/notification_model.dart';
-import 'package:hive_flutter/services/notification_service.dart';
 import 'package:hive_flutter/chat_list_screen.dart';
 
 class DashboardScreen extends StatefulWidget {

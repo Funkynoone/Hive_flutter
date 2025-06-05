@@ -5,7 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'dart:io';
-import 'package:hive_flutter/services/notification_service.dart'; // Assuming this service exists and works
+// Assuming this service exists and works
 
 class JobDetailScreen extends StatefulWidget {
   final Job job;

@@ -78,7 +78,7 @@ class _ChatListScreenState extends State<ChatListScreen> with SingleTickerProvid
     }
 
     try {
-      final String chatRoomId = '${ownerUid}_${applicantId}_${jobId}';
+      final String chatRoomId = '${ownerUid}_${applicantId}_$jobId';
       WriteBatch batch = FirebaseFirestore.instance.batch();
 
       // 1. Create the chat room
@@ -277,7 +277,7 @@ class _ChatListScreenState extends State<ChatListScreen> with SingleTickerProvid
           indicatorWeight: 3,
           tabs: [
             Tab(text: 'Unread ($_unreadMessagesCount)'),
-            Tab(text: 'Active Chats'),
+            const Tab(text: 'Active Chats'),
           ],
         ),
       ),

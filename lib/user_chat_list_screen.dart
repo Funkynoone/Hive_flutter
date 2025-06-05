@@ -24,6 +24,43 @@ class _UserChatListScreenState extends State<UserChatListScreen> with SingleTick
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
     print("[UserChatListScreen] initState: currentUser UID: ${currentUser?.uid}");
+
+    // Initialize counters by triggering the streams
+    _initializeCounters();
+  }
+
+  void _initializeCounters() {
+    // Get initial counts for all tabs
+    if (currentUser != null) {
+      // Pending count
+      FirebaseFirestore.instance
+          .collection('notifications')
+          .where('senderId', isEqualTo: currentUser!.uid)
+          .where('type', isEqualTo: 'message')
+          .get()
+          .then((snapshot) {
+        _pendingCount.value = snapshot.docs.length;
+      });
+
+      // Accepted count
+      FirebaseFirestore.instance
+          .collection('chats')
+          .where('participants', arrayContains: currentUser!.uid)
+          .get()
+          .then((snapshot) {
+        _acceptedCount.value = snapshot.docs.length;
+      });
+
+      // Declined count
+      FirebaseFirestore.instance
+          .collection('userApplicationFeedback')
+          .where('userId', isEqualTo: currentUser!.uid)
+          .where('status', isEqualTo: 'declined')
+          .get()
+          .then((snapshot) {
+        _declinedCount.value = snapshot.docs.length;
+      });
+    }
   }
 
   @override

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class ApplicationManagerScreen extends StatefulWidget {
@@ -44,7 +43,7 @@ class _ApplicationManagerScreenState extends State<ApplicationManagerScreen> {
 
       final batch = FirebaseFirestore.instance.batch();
       for (var doc in notifications.docs) {
-        final type = (doc.data() as Map<String, dynamic>)['type'] as String?;
+        final type = (doc.data())['type'] as String?;
         if (type == 'cv') {
           batch.delete(doc.reference);
         }
@@ -149,9 +148,9 @@ class _ApplicationManagerScreenState extends State<ApplicationManagerScreen> {
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        CircleAvatar(
+                        const CircleAvatar(
                           backgroundColor: Colors.blue,
-                          child: const Icon(Icons.message, color: Colors.white),
+                          child: Icon(Icons.message, color: Colors.white),
                         ),
                         const SizedBox(width: 12),
                         Expanded(
@@ -192,9 +191,9 @@ class _ApplicationManagerScreenState extends State<ApplicationManagerScreen> {
                 return Card(
                   margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   child: ListTile(
-                    leading: CircleAvatar(
+                    leading: const CircleAvatar(
                       backgroundColor: Colors.green,
-                      child: const Icon(Icons.description, color: Colors.white),
+                      child: Icon(Icons.description, color: Colors.white),
                     ),
                     title: Text(
                       'CV received from ${data['data']['applicantName'] ?? 'someone'}',
