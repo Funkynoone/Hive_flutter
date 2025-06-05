@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:hive_flutter/models/job.dart';
 import '../utils/job_marker_utils.dart';
 import '../services/job_application_service.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class JobDetailsSheet extends StatefulWidget {
   final Job job;
@@ -44,75 +46,225 @@ class _JobDetailsSheetState extends State<JobDetailsSheet> {
     });
   }
 
+  void _showMessageDialog() {
+    final messageController = TextEditingController();
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Send Message to Owner'),
+        content: TextField(
+          controller: messageController,
+          decoration: const InputDecoration(
+            hintText: 'Write your message...',
+            border: OutlineInputBorder(),
+          ),
+          maxLines: 3,
+          autofocus: true,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              if (messageController.text.trim().isNotEmpty) {
+                Navigator.pop(dialogContext);
+                setState(() => _isSending = true);
+                widget.setSending(true);
+                await _sendMessage(messageController.text.trim());
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Message cannot be empty.'),
+                    backgroundColor: Colors.orange,
+                  ),
+                );
+              }
+            },
+            child: const Text('Send'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _sendMessage(String message) async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Please login to apply'),
+              backgroundColor: Colors.red,
+            ),
+          );
+          setState(() => _isSending = false);
+          widget.setSending(false);
+        }
+        return;
+      }
+
+      final userDataSnapshot = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
+
+      final applicantName = userDataSnapshot.data()?['username'] ?? 'Anonymous Applicant';
+
+      final WriteBatch batch = FirebaseFirestore.instance.batch();
+
+      final notificationRef = FirebaseFirestore.instance.collection('notifications').doc();
+      batch.set(notificationRef, {
+        'userId': widget.job.ownerId,
+        'senderId': user.uid,
+        'type': 'message',
+        'message': message,
+        'data': {
+          'jobId': widget.job.id,
+          'jobTitle': widget.job.title,
+          'businessName': widget.job.restaurant,
+          'applicantName': applicantName,
+        },
+        'timestamp': FieldValue.serverTimestamp(),
+        'isRead': false,
+      });
+
+      final userMessageRef = FirebaseFirestore.instance.collection('user_messages').doc();
+      batch.set(userMessageRef, {
+        'userId': user.uid,
+        'ownerId': widget.job.ownerId,
+        'status': 'pending',
+        'message': message,
+        'data': {
+          'jobTitle': widget.job.title,
+          'businessName': widget.job.restaurant,
+          'jobId': widget.job.id,
+          'ownerId': widget.job.ownerId,
+        },
+        'timestamp': FieldValue.serverTimestamp(),
+      });
+
+      await batch.commit();
+
+      if (mounted) {
+        // Show success toast
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Message sent successfully!'),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 3),
+          ),
+        );
+
+        // Close the bottom sheet after a short delay
+        Future.delayed(const Duration(milliseconds: 500), () {
+          if (mounted) {
+            Navigator.of(context).pop();
+          }
+        });
+      }
+    } catch (e) {
+      print('Error sending message: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isSending = false);
+        widget.setSending(false);
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    return DraggableScrollableSheet(
-      initialChildSize: 0.35, // Slightly increased to accommodate buttons
-      minChildSize: 0.35,
-      maxChildSize: 0.9,
-      snap: true,
-      snapSizes: const [0.35, 0.9],
-      controller: _controller,
-      builder: (context, scrollController) {
-        return Container(
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.2),
-                spreadRadius: 2,
-                blurRadius: 10,
-              ),
-            ],
-          ),
-          child: SingleChildScrollView(
-            controller: scrollController,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _buildDragHandle(),
-                Padding(
-                  padding: const EdgeInsets.all(16.0),
+    return GestureDetector(
+      onTap: () {
+        // Dismiss the sheet when tapping outside
+        Navigator.of(context).pop();
+      },
+      child: Container(
+        color: Colors.transparent,
+        child: GestureDetector(
+          onTap: () {}, // Prevent dismissal when tapping on the sheet itself
+          child: DraggableScrollableSheet(
+            initialChildSize: 0.35, // Slightly increased to accommodate buttons
+            minChildSize: 0.35,
+            maxChildSize: 0.9,
+            snap: true,
+            snapSizes: const [0.35, 0.9],
+            controller: _controller,
+            builder: (context, scrollController) {
+              return Container(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.2),
+                      spreadRadius: 2,
+                      blurRadius: 10,
+                    ),
+                  ],
+                ),
+                child: SingleChildScrollView(
+                  controller: scrollController,
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      _buildHeader(),
-                      const SizedBox(height: 12),
-                      _buildTags(),
-                      const SizedBox(height: 16),
+                      _buildDragHandle(),
+                      Padding(
+                        padding: const EdgeInsets.all(16.0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _buildHeader(),
+                            const SizedBox(height: 12),
+                            _buildTags(),
+                            const SizedBox(height: 16),
 
-                      // Show buttons in both collapsed and expanded states
-                      _buildButtons(context, isCompact: !_isExpanded),
+                            // Show buttons in both collapsed and expanded states
+                            _buildButtons(context, isCompact: !_isExpanded),
 
-                      if (_isExpanded) ...[
-                        const SizedBox(height: 16),
-                        _buildFullDescription(),
-                      ] else ...[
-                        const SizedBox(height: 12),
-                        _buildCompactDescription(),
-                        Center(
-                          child: Padding(
-                            padding: const EdgeInsets.only(top: 8),
-                            child: Text(
-                              'Drag up for more details',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: Colors.grey[400],
+                            if (_isExpanded) ...[
+                              const SizedBox(height: 16),
+                              _buildFullDescription(),
+                            ] else ...[
+                              const SizedBox(height: 12),
+                              _buildCompactDescription(),
+                              Center(
+                                child: Padding(
+                                  padding: const EdgeInsets.only(top: 8),
+                                  child: Text(
+                                    'Drag up for more details',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.grey[400],
+                                    ),
+                                  ),
+                                ),
                               ),
-                            ),
-                          ),
+                            ],
+                          ],
                         ),
-                      ],
+                      ),
                     ],
                   ),
                 ),
-              ],
-            ),
+              );
+            },
           ),
-        );
-      },
+        ),
+      ),
     );
   }
 
@@ -310,16 +462,7 @@ class _JobDetailsSheetState extends State<JobDetailsSheet> {
           child: ElevatedButton.icon(
             onPressed: _isSending
                 ? null
-                : () {
-              JobApplicationService.showMessageDialog(
-                context,
-                widget.job,
-                    (value) {
-                  setState(() => _isSending = value);
-                  widget.setSending(value);
-                },
-              );
-            },
+                : _showMessageDialog,
             icon: Icon(Icons.message, size: isCompact ? 18 : 24),
             label: Text(
               _isSending ? 'Sending...' : 'Contact',

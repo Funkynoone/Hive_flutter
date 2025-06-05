@@ -78,7 +78,7 @@ class _ChatListScreenState extends State<ChatListScreen> with SingleTickerProvid
     }
 
     try {
-      final String chatRoomId = '${ownerUid}_${applicantId}_$jobId';
+      final String chatRoomId = '${ownerUid}_${applicantId}_${jobId}';
       WriteBatch batch = FirebaseFirestore.instance.batch();
 
       // 1. Create the chat room
@@ -277,7 +277,7 @@ class _ChatListScreenState extends State<ChatListScreen> with SingleTickerProvid
           indicatorWeight: 3,
           tabs: [
             Tab(text: 'Unread ($_unreadMessagesCount)'),
-            const Tab(text: 'Active Chats'),
+            Tab(text: 'Active Chats'),
           ],
         ),
       ),
@@ -301,8 +301,8 @@ class _ChatListScreenState extends State<ChatListScreen> with SingleTickerProvid
           .collection('notifications')
           .where('userId', isEqualTo: currentUser?.uid)
           .where('type', isEqualTo: 'message')
-          .where('status', isNull: true) // Only show unprocessed notifications
-          .orderBy('status') // Add this to the compound index
+          .where('isRead', isEqualTo: false) // Show only unread messages
+          .orderBy('isRead') // Add this to the compound index
           .orderBy('timestamp', descending: true)
           .snapshots(),
       builder: (context, snapshot) {
@@ -323,7 +323,7 @@ class _ChatListScreenState extends State<ChatListScreen> with SingleTickerProvid
                     const Text('Database index required'),
                     const SizedBox(height: 8),
                     Text(
-                      'Please create an index for:\nnotifications -> userId + type + status + timestamp (descending)',
+                      'Please create an index for:\nnotifications -> userId + type + isRead + timestamp (descending)',
                       textAlign: TextAlign.center,
                       style: TextStyle(color: Colors.grey[600]),
                     ),
