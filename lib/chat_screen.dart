@@ -52,29 +52,37 @@ class _ChatScreenState extends State<ChatScreen> {
     if (!chatDoc.exists) return;
 
     final chatData = chatDoc.data() as Map<String, dynamic>;
-    final lastSenderId = chatData['lastSenderId'] as String?;
+    final ownerId = chatData['ownerId'] as String?;
+    final applicantId = chatData['applicantId'] as String?;
 
-    // Only reset unread count if the last message was from the other person
-    if (lastSenderId != null && lastSenderId != currentUser?.uid) {
-      // Get unread messages sent by the other person
-      final messagesRef = chatRef.collection('messages');
-      final unreadMessages = await messagesRef
-          .where('senderId', isNotEqualTo: currentUser?.uid)
-          .where('isRead', isEqualTo: false)
-          .get();
+    // Determine which unread count field to reset based on who's viewing
+    String unreadCountField;
+    if (currentUser?.uid == ownerId) {
+      unreadCountField = 'ownerUnreadCount';
+    } else if (currentUser?.uid == applicantId) {
+      unreadCountField = 'applicantUnreadCount';
+    } else {
+      return; // User not part of this chat
+    }
 
-      if (unreadMessages.docs.isNotEmpty) {
-        // Mark messages as read
-        final batch = FirebaseFirestore.instance.batch();
-        for (var doc in unreadMessages.docs) {
-          batch.update(doc.reference, {'isRead': true});
-        }
+    // Get unread messages sent by the other person
+    final messagesRef = chatRef.collection('messages');
+    final unreadMessages = await messagesRef
+        .where('senderId', isNotEqualTo: currentUser?.uid)
+        .where('isRead', isEqualTo: false)
+        .get();
 
-        // Reset unread count
-        batch.update(chatRef, {'unreadCount': 0});
-
-        await batch.commit();
+    if (unreadMessages.docs.isNotEmpty) {
+      // Mark messages as read
+      final batch = FirebaseFirestore.instance.batch();
+      for (var doc in unreadMessages.docs) {
+        batch.update(doc.reference, {'isRead': true});
       }
+
+      // Reset the appropriate unread count
+      batch.update(chatRef, {unreadCountField: 0});
+
+      await batch.commit();
     }
   }
 
@@ -86,16 +94,22 @@ class _ChatScreenState extends State<ChatScreen> {
           .collection('chats')
           .doc(widget.chatRoomId);
 
-      // Get chat data to determine other participant
+      // Get chat data to determine other participant and current counts
       final chatData = await chatRef.get();
-      final participants = List<String>.from(chatData.data()?['participants'] ?? []);
-      final otherUserId = participants.firstWhere(
-            (id) => id != currentUser?.uid,
-        orElse: () => '',
-      );
+      final data = chatData.data() as Map<String, dynamic>;
+      final ownerId = data['ownerId'] as String?;
+      final applicantId = data['applicantId'] as String?;
 
-      // Get current unread count
-      final currentUnreadCount = chatData.data()?['unreadCount'] ?? 0;
+      // Determine which unread count to increment
+      String incrementField;
+      if (currentUser?.uid == ownerId) {
+        incrementField = 'applicantUnreadCount';
+      } else {
+        incrementField = 'ownerUnreadCount';
+      }
+
+      // Get current unread count for the recipient
+      final currentUnreadCount = data[incrementField] ?? 0;
 
       // Add message
       await chatRef.collection('messages').add({
@@ -112,7 +126,7 @@ class _ChatScreenState extends State<ChatScreen> {
         'lastMessageTime': FieldValue.serverTimestamp(),
         'lastSenderId': currentUser?.uid,
         // Increment unread count only for the recipient
-        'unreadCount': currentUnreadCount + 1
+        incrementField: currentUnreadCount + 1
       });
 
       _messageController.clear();

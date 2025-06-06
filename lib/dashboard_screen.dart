@@ -78,44 +78,54 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Widget _buildChatButton() {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null) return IconButton(
+      icon: const Icon(Icons.chat_bubble_outline),
+      onPressed: () {},
+    );
+
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
-          .collection('notifications')
-          .where('userId', isEqualTo: FirebaseAuth.instance.currentUser?.uid)
+          .collection('chats')
+          .where('participants', arrayContains: currentUser.uid)
           .snapshots(),
-      builder: (context, notificationSnapshot) {
-        int unreadMessages = 0;
+      builder: (context, chatSnapshot) {
+        int unreadChats = 0;
 
-        // Count unread message notifications
-        if (notificationSnapshot.hasData) {
-          unreadMessages = notificationSnapshot.data!.docs.where((doc) {
-            final type = (doc.data() as Map<String, dynamic>)['type'] as String?;
-            return type == 'message';
-          }).length;
-        }
+        // Count unread chats
+        if (chatSnapshot.hasData) {
+          for (var doc in chatSnapshot.data!.docs) {
+            final data = doc.data() as Map<String, dynamic>;
+            final unreadCount = data['unreadCount'] as int? ?? 0;
+            final lastSenderId = data['lastSenderId'] as String?;
+            final messages = data['messages'] as List<dynamic>? ?? [];
 
-        return StreamBuilder<QuerySnapshot>(
-          stream: FirebaseFirestore.instance
-              .collection('chats')
-              .where('participants', arrayContains: FirebaseAuth.instance.currentUser?.uid)
-              .snapshots(),
-          builder: (context, chatSnapshot) {
-            int unreadChats = 0;
-
-            // Count unread chats
-            if (chatSnapshot.hasData) {
-              for (var doc in chatSnapshot.data!.docs) {
-                final data = doc.data() as Map<String, dynamic>;
-                final unreadCount = data['unreadCount'] as int? ?? 0;
-                final lastSenderId = data['lastSenderId'] as String?;
-
-                if (lastSenderId != FirebaseAuth.instance.currentUser?.uid && unreadCount > 0) {
+            // Count only unread messages from other users
+            if (lastSenderId != currentUser.uid && unreadCount > 0) {
+              for (var message in messages) {
+                if (message is Map<String, dynamic> && 
+                    message['senderId'] != currentUser.uid && 
+                    !message['isRead']) {
                   unreadChats++;
                 }
               }
             }
+          }
+        }
 
-            final totalUnread = unreadMessages + unreadChats;
+        return StreamBuilder<QuerySnapshot>(
+          stream: FirebaseFirestore.instance
+              .collection('notifications')
+              .where('userId', isEqualTo: currentUser.uid)
+              .where('status', isEqualTo: 'unread')
+              .where('type', isEqualTo: 'message')
+              .snapshots(),
+          builder: (context, notificationSnapshot) {
+            int unreadMessages = notificationSnapshot.hasData 
+                ? notificationSnapshot.data!.docs.length 
+                : 0;
+
+            final totalUnread = unreadChats + unreadMessages;
 
             return Stack(
               children: [
@@ -163,18 +173,25 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Widget _buildNotificationButton() {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null) return IconButton(
+      icon: const Icon(Icons.notifications_none),
+      onPressed: () {},
+    );
+
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
           .collection('notifications')
-          .where('userId', isEqualTo: FirebaseAuth.instance.currentUser!.uid)
+          .where('userId', isEqualTo: currentUser.uid)
+          .where('status', isEqualTo: 'unread')
           .snapshots(),
       builder: (context, snapshot) {
-        // Count only CV and message notifications
         int unreadCount = 0;
         if (snapshot.hasData) {
           unreadCount = snapshot.data!.docs.where((doc) {
             final type = (doc.data() as Map<String, dynamic>)['type'] as String?;
-            return type == 'cv' || type == 'message';
+            final status = (doc.data() as Map<String, dynamic>)['status'] as String?;
+            return (type == 'cv' || type == 'message') && status == 'unread';
           }).length;
         }
 
@@ -188,7 +205,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   MaterialPageRoute(
                     builder: (context) => isBusinessOwner
                         ? ApplicationManagerScreen(
-                      ownerId: FirebaseAuth.instance.currentUser!.uid,
+                      ownerId: currentUser.uid,
                     )
                         : const UserApplicationsScreen(),
                   ),

@@ -12,6 +12,31 @@ class ApplicationManagerScreen extends StatefulWidget {
 }
 
 class _ApplicationManagerScreenState extends State<ApplicationManagerScreen> {
+  @override
+  void initState() {
+    super.initState();
+    // Mark all notifications as read when opening the screen
+    _markNotificationsAsRead();
+  }
+
+  Future<void> _markNotificationsAsRead() async {
+    try {
+      final notifications = await FirebaseFirestore.instance
+          .collection('notifications')
+          .where('userId', isEqualTo: widget.ownerId)
+          .where('isRead', isEqualTo: false)
+          .get();
+
+      final batch = FirebaseFirestore.instance.batch();
+      for (var doc in notifications.docs) {
+        batch.update(doc.reference, {'isRead': true});
+      }
+      await batch.commit();
+    } catch (e) {
+      print("Error marking notifications as read: $e");
+    }
+  }
+
   Future<void> _deleteNotification(String notificationId) async {
     try {
       await FirebaseFirestore.instance
