@@ -242,29 +242,24 @@ class _DashboardScreenState extends State<DashboardScreen> {
       stream: FirebaseFirestore.instance
           .collection('notifications')
           .where('userId', isEqualTo: currentUser.uid)
+          .where('isRead', isEqualTo: false)  // Only count unread notifications
           .snapshots(),
       builder: (context, snapshot) {
         int unreadCount = 0;
         if (snapshot.hasData) {
-          if (isBusinessOwner) {
-            // For business owners: count CV applications and unread notifications
-            unreadCount = snapshot.data!.docs.where((doc) {
-              final data = doc.data() as Map<String, dynamic>;
-              final type = data['type'] as String?;
-              final isRead = data['isRead'] as bool? ?? false;
+          // Count only unread notifications of relevant types
+          unreadCount = snapshot.data!.docs.where((doc) {
+            final data = doc.data() as Map<String, dynamic>;
+            final type = data['type'] as String?;
 
-              // Count CV applications or unread notifications
-              return (type == 'cv' && !isRead) ||
-                  (type == 'message' && !isRead);
-            }).length;
-          } else {
-            // For regular users: count application status updates
-            unreadCount = snapshot.data!.docs.where((doc) {
-              final data = doc.data() as Map<String, dynamic>;
-              final isRead = data['isRead'] as bool? ?? false;
-              return !isRead;
-            }).length;
-          }
+            if (isBusinessOwner) {
+              // For business owners: count CV applications and message notifications
+              return type == 'cv' || type == 'cv_application' || type == 'message';
+            } else {
+              // For regular users: count all unread notifications
+              return true;
+            }
+          }).length;
         }
 
         return Stack(
@@ -276,9 +271,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   context,
                   MaterialPageRoute(
                     builder: (context) => isBusinessOwner
-                        ? ApplicationManagerScreen(
-                      ownerId: currentUser.uid,
-                    )
+                        ? ApplicationManagerScreen(ownerId: currentUser.uid)
                         : const UserApplicationsScreen(),
                   ),
                 );
