@@ -32,14 +32,20 @@ class _UserChatListScreenState extends State<UserChatListScreen> with SingleTick
   void _initializeCounters() {
     // Get initial counts for all tabs
     if (currentUser != null) {
-      // Pending count
+      // Pending count - notifications that haven't been processed
       FirebaseFirestore.instance
           .collection('notifications')
           .where('senderId', isEqualTo: currentUser!.uid)
           .where('type', isEqualTo: 'message')
           .get()
           .then((snapshot) {
-        _pendingCount.value = snapshot.docs.length;
+        final pendingCount = snapshot.docs.where((doc) {
+          final data = doc.data() as Map<String, dynamic>;
+          final status = data['status'] as String?;
+          // Count only unprocessed notifications
+          return status == null || (!['accepted', 'rejected', 'declined'].contains(status));
+        }).length;
+        _pendingCount.value = pendingCount;
       });
 
       // Accepted count
@@ -210,16 +216,48 @@ class _UserChatListScreenState extends State<UserChatListScreen> with SingleTick
     final businessName = data['businessName'] as String? ?? 'Unknown Business';
     final jobTitle = data['jobTitle'] as String? ?? 'Job Chat';
     final avatarChar = businessName.isNotEmpty ? businessName[0].toUpperCase() : 'B';
+    final applicantUnreadCount = data['applicantUnreadCount'] as int? ?? 0;
+    final lastSenderId = data['lastSenderId'] as String?;
+    final hasUnreadMessages = lastSenderId != currentUser?.uid && applicantUnreadCount > 0;
 
     return Card(
       elevation: 2,
-      color: Colors.lightBlue[50],
+      color: hasUnreadMessages ? Colors.lightBlue[100] : Colors.lightBlue[50],
       margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       child: ListTile(
         contentPadding: const EdgeInsets.all(12),
-        leading: CircleAvatar(
-          backgroundColor: Colors.lightBlue,
-          child: Text(avatarChar, style: const TextStyle(color: Colors.white)),
+        leading: Stack(
+          children: [
+            CircleAvatar(
+              backgroundColor: Colors.lightBlue,
+              child: Text(avatarChar, style: const TextStyle(color: Colors.white)),
+            ),
+            if (hasUnreadMessages)
+              Positioned(
+                right: 0,
+                top: 0,
+                child: Container(
+                  padding: const EdgeInsets.all(4),
+                  decoration: BoxDecoration(
+                    color: Colors.red,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white, width: 2),
+                  ),
+                  constraints: const BoxConstraints(
+                    minWidth: 16,
+                    minHeight: 16,
+                  ),
+                  child: Text(
+                    applicantUnreadCount.toString(),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 10,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              ),
+          ],
         ),
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -232,21 +270,18 @@ class _UserChatListScreenState extends State<UserChatListScreen> with SingleTick
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const SizedBox(height: 8),
-            Text(data['lastMessage'] ?? 'No messages yet', maxLines: 1, overflow: TextOverflow.ellipsis),
+            Text(
+              data['lastMessage'] ?? 'No messages yet',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontWeight: hasUnreadMessages ? FontWeight.bold : FontWeight.normal,
+              ),
+            ),
             const SizedBox(height: 4),
             Text(_getTimeAgo(lastMessageTimestamp), style: TextStyle(fontSize: 12, color: Colors.grey[600])),
           ],
         ),
-        trailing: data['unreadCount'] != null && data['unreadCount'] > 0 && data['lastSenderId'] != currentUser?.uid
-            ? Container(
-          padding: const EdgeInsets.all(6),
-          decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
-          child: Text(
-            data['unreadCount'].toString(),
-            style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
-          ),
-        )
-            : null,
         onTap: () {
           Navigator.push(
             context,
@@ -300,22 +335,28 @@ class _UserChatListScreenState extends State<UserChatListScreen> with SingleTick
           return const Center(child: CircularProgressIndicator());
         }
 
-        // Update count
-        if (snapshot.hasData) {
-          final newCount = snapshot.data!.docs.length;
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            _pendingCount.value = newCount;
-          });
-        }
+        // Filter for unprocessed notifications only
+        final pendingNotifications = snapshot.hasData ? snapshot.data!.docs.where((doc) {
+          final data = doc.data() as Map<String, dynamic>;
+          final status = data['status'] as String?;
+          // Show only notifications that haven't been processed
+          return status == null || (!['accepted', 'rejected', 'declined'].contains(status));
+        }).toList() : [];
 
-        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+        // Update count
+        final newCount = pendingNotifications.length;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _pendingCount.value = newCount;
+        });
+
+        if (pendingNotifications.isEmpty) {
           return const Center(child: Text('No pending applications'));
         }
 
         return ListView.builder(
-          itemCount: snapshot.data!.docs.length,
+          itemCount: pendingNotifications.length,
           itemBuilder: (context, index) => _buildMessageCard(
-              snapshot.data!.docs[index],
+              pendingNotifications[index],
               isNaturePending: true
           ),
         );

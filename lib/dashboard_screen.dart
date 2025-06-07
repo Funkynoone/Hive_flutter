@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:hive_flutter/profile_screen.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:hive_flutter/jobs_main_screen.dart'; // Changed from jobs_screen.dart
+import 'package:hive_flutter/jobs_main_screen.dart';
 import 'package:hive_flutter/add_job_screen.dart';
 import 'package:hive_flutter/saved_jobs_screen.dart';
 import 'package:hive_flutter/application_manager_screen.dart';
@@ -44,7 +44,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   void _initializeScreens() {
     List<Widget> screens = [
       const Center(child: Text('Explore Screen')),
-      const JobsMainScreen(), // Changed from JobsScreen()
+      const JobsMainScreen(),
       const SavedJobsScreen(),
       ProfileScreen(
         onLogout: () async {
@@ -84,92 +84,151 @@ class _DashboardScreenState extends State<DashboardScreen> {
       onPressed: () {},
     );
 
-    return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('chats')
-          .where('participants', arrayContains: currentUser.uid)
-          .snapshots(),
-      builder: (context, chatSnapshot) {
-        int unreadChats = 0;
-
-        // Count unread chats
-        if (chatSnapshot.hasData) {
-          for (var doc in chatSnapshot.data!.docs) {
-            final data = doc.data() as Map<String, dynamic>;
-            final unreadCount = data['unreadCount'] as int? ?? 0;
-            final lastSenderId = data['lastSenderId'] as String?;
-            final messages = data['messages'] as List<dynamic>? ?? [];
-
-            // Count only unread messages from other users
-            if (lastSenderId != currentUser.uid && unreadCount > 0) {
-              for (var message in messages) {
-                if (message is Map<String, dynamic> && 
-                    message['senderId'] != currentUser.uid && 
-                    !message['isRead']) {
-                  unreadChats++;
-                }
-              }
-            }
+    if (isBusinessOwner) {
+      // For business owners: count unprocessed message notifications
+      return StreamBuilder<QuerySnapshot>(
+        stream: FirebaseFirestore.instance
+            .collection('notifications')
+            .where('userId', isEqualTo: currentUser.uid)
+            .where('type', isEqualTo: 'message')
+            .snapshots(),
+        builder: (context, snapshot) {
+          int unreadCount = 0;
+          if (snapshot.hasData) {
+            // Count notifications that haven't been processed (no status or null status)
+            unreadCount = snapshot.data!.docs.where((doc) {
+              final data = doc.data() as Map<String, dynamic>;
+              final status = data['status'] as String?;
+              return status == null || (!['accepted', 'declined', 'rejected'].contains(status));
+            }).length;
           }
-        }
 
-        return StreamBuilder<QuerySnapshot>(
-          stream: FirebaseFirestore.instance
-              .collection('notifications')
-              .where('userId', isEqualTo: currentUser.uid)
-              .where('status', isEqualTo: 'unread')
-              .where('type', isEqualTo: 'message')
-              .snapshots(),
-          builder: (context, notificationSnapshot) {
-            int unreadMessages = notificationSnapshot.hasData 
-                ? notificationSnapshot.data!.docs.length 
-                : 0;
-
-            final totalUnread = unreadChats + unreadMessages;
-
-            return Stack(
-              children: [
-                IconButton(
-                  icon: const Icon(Icons.chat_bubble_outline),
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const ChatListScreen(),
+          return Stack(
+            children: [
+              IconButton(
+                icon: const Icon(Icons.chat_bubble_outline),
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const ChatListScreen(),
+                    ),
+                  );
+                },
+              ),
+              if (unreadCount > 0)
+                Positioned(
+                  right: 0,
+                  top: 0,
+                  child: Container(
+                    padding: const EdgeInsets.all(2),
+                    decoration: BoxDecoration(
+                      color: Colors.red,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    constraints: const BoxConstraints(
+                      minWidth: 20,
+                      minHeight: 20,
+                    ),
+                    child: Text(
+                      '$unreadCount',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
                       ),
-                    );
-                  },
-                ),
-                if (totalUnread > 0)
-                  Positioned(
-                    right: 0,
-                    top: 0,
-                    child: Container(
-                      padding: const EdgeInsets.all(2),
-                      decoration: BoxDecoration(
-                        color: Colors.red,
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      constraints: const BoxConstraints(
-                        minWidth: 20,
-                        minHeight: 20,
-                      ),
-                      child: Text(
-                        '$totalUnread',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 12,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
+                      textAlign: TextAlign.center,
                     ),
                   ),
-              ],
-            );
-          },
-        );
-      },
-    );
+                ),
+            ],
+          );
+        },
+      );
+    } else {
+      // For regular users: count unread chats and pending applications
+      return StreamBuilder<QuerySnapshot>(
+        stream: FirebaseFirestore.instance
+            .collection('chats')
+            .where('participants', arrayContains: currentUser.uid)
+            .snapshots(),
+        builder: (context, chatSnapshot) {
+          return StreamBuilder<QuerySnapshot>(
+            stream: FirebaseFirestore.instance
+                .collection('notifications')
+                .where('senderId', isEqualTo: currentUser.uid)
+                .where('type', isEqualTo: 'message')
+                .snapshots(),
+            builder: (context, notificationSnapshot) {
+              int totalUnread = 0;
+
+              // Count unread messages in chats
+              if (chatSnapshot.hasData) {
+                for (var doc in chatSnapshot.data!.docs) {
+                  final data = doc.data() as Map<String, dynamic>;
+                  final lastSenderId = data['lastSenderId'] as String?;
+                  final applicantUnreadCount = data['applicantUnreadCount'] as int? ?? 0;
+
+                  // If the last message wasn't from current user and there are unread messages
+                  if (lastSenderId != currentUser.uid && applicantUnreadCount > 0) {
+                    totalUnread += applicantUnreadCount;
+                  }
+                }
+              }
+
+              // Count pending notifications (applications that haven't been processed)
+              if (notificationSnapshot.hasData) {
+                final pendingCount = notificationSnapshot.data!.docs.where((doc) {
+                  final data = doc.data() as Map<String, dynamic>;
+                  final status = data['status'] as String?;
+                  return status == null || (!['accepted', 'declined', 'rejected'].contains(status));
+                }).length;
+                totalUnread += pendingCount;
+              }
+
+              return Stack(
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.chat_bubble_outline),
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const ChatListScreen(),
+                        ),
+                      );
+                    },
+                  ),
+                  if (totalUnread > 0)
+                    Positioned(
+                      right: 0,
+                      top: 0,
+                      child: Container(
+                        padding: const EdgeInsets.all(2),
+                        decoration: BoxDecoration(
+                          color: Colors.red,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        constraints: const BoxConstraints(
+                          minWidth: 20,
+                          minHeight: 20,
+                        ),
+                        child: Text(
+                          '$totalUnread',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    ),
+                ],
+              );
+            },
+          );
+        },
+      );
+    }
   }
 
   Widget _buildNotificationButton() {
@@ -183,16 +242,29 @@ class _DashboardScreenState extends State<DashboardScreen> {
       stream: FirebaseFirestore.instance
           .collection('notifications')
           .where('userId', isEqualTo: currentUser.uid)
-          .where('status', isEqualTo: 'unread')
           .snapshots(),
       builder: (context, snapshot) {
         int unreadCount = 0;
         if (snapshot.hasData) {
-          unreadCount = snapshot.data!.docs.where((doc) {
-            final type = (doc.data() as Map<String, dynamic>)['type'] as String?;
-            final status = (doc.data() as Map<String, dynamic>)['status'] as String?;
-            return (type == 'cv' || type == 'message') && status == 'unread';
-          }).length;
+          if (isBusinessOwner) {
+            // For business owners: count CV applications and unread notifications
+            unreadCount = snapshot.data!.docs.where((doc) {
+              final data = doc.data() as Map<String, dynamic>;
+              final type = data['type'] as String?;
+              final isRead = data['isRead'] as bool? ?? false;
+
+              // Count CV applications or unread notifications
+              return (type == 'cv' && !isRead) ||
+                  (type == 'message' && !isRead);
+            }).length;
+          } else {
+            // For regular users: count application status updates
+            unreadCount = snapshot.data!.docs.where((doc) {
+              final data = doc.data() as Map<String, dynamic>;
+              final isRead = data['isRead'] as bool? ?? false;
+              return !isRead;
+            }).length;
+          }
         }
 
         return Stack(
@@ -261,9 +333,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('App'),
-        leading: _buildChatButton(), // Chat icon on top left
+        leading: _buildChatButton(),
         actions: [
-          _buildNotificationButton(), // Notification icon on top right
+          _buildNotificationButton(),
         ],
       ),
       body: IndexedStack(

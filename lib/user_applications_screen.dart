@@ -10,7 +10,49 @@ class UserApplicationsScreen extends StatefulWidget {
 }
 
 class _UserApplicationsScreenState extends State<UserApplicationsScreen> {
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final currentUser = FirebaseAuth.instance.currentUser;
+
+  @override
+  void initState() {
+    super.initState();
+    _markNotificationsAsRead();
+  }
+
+  Future<void> _markNotificationsAsRead() async {
+    final user = currentUser;
+    if (user == null) return;
+
+    print('[UserApplicationsScreen] Marking application_status notifications as read for user ${user.uid}');
+
+    try {
+      final querySnapshot = await _firestore
+          .collection('notifications')
+          .where('userId', isEqualTo: user.uid)
+          .where('type', isEqualTo: 'application_status')
+          .where('status', whereIn: [null, 'pending'])
+          .get();
+
+      if (querySnapshot.docs.isEmpty) {
+        print('[UserApplicationsScreen] No pending application_status notifications to mark as read.');
+        return;
+      }
+
+      WriteBatch batch = _firestore.batch();
+      for (var doc in querySnapshot.docs) {
+        batch.update(doc.reference, {'status': 'read'});
+      }
+      await batch.commit();
+      print('[UserApplicationsScreen] Successfully marked ${querySnapshot.docs.length} application_status notifications as read.');
+    } catch (e) {
+      print('[UserApplicationsScreen] Error marking notifications as read: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error updating notification statuses: $e')),
+        );
+      }
+    }
+  }
 
   String _getTimeAgo(DateTime? dateTime) {
     if (dateTime == null) return '';
@@ -36,131 +78,123 @@ class _UserApplicationsScreenState extends State<UserApplicationsScreen> {
         title: const Text('My Applications'),
       ),
       body: StreamBuilder<QuerySnapshot>(
-        stream: FirebaseFirestore.instance
-            .collection('JobListings')
+        stream: _firestore
+            .collection('notifications')
+            .where('userId', isEqualTo: currentUser?.uid)
+            .where('type', isEqualTo: 'application_status') // We are interested in status updates
+            .orderBy('timestamp', descending: true)
             .snapshots(),
-        builder: (context, jobSnapshot) {
-          if (jobSnapshot.hasError) {
-            return Center(child: Text('Error: ${jobSnapshot.error}'));
+        builder: (context, snapshot) {
+          if (snapshot.hasError) {
+            print("[UserApplicationsScreen] Error fetching notifications: ${snapshot.error}");
+            return Center(child: Text('Error: ${snapshot.error}'));
           }
 
-          if (jobSnapshot.connectionState == ConnectionState.waiting) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
 
-          // Get all applications for the current user
-          return StreamBuilder<QuerySnapshot>(
-            stream: FirebaseFirestore.instance
-                .collectionGroup('Applications')
-                .where('userId', isEqualTo: currentUser?.uid)
-                .orderBy('timestamp', descending: true)
-                .snapshots(),
-            builder: (context, appSnapshot) {
-              if (appSnapshot.hasError) {
-                return Center(child: Text('Error: ${appSnapshot.error}'));
+          if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+            return const Center(child: Text('No application status updates yet.'));
+          }
+
+          return ListView.builder(
+            itemCount: snapshot.data!.docs.length,
+            itemBuilder: (context, index) {
+              final notificationDoc = snapshot.data!.docs[index];
+              final data = notificationDoc.data() as Map<String, dynamic>; // This is the notification data
+              final timestamp = (data['timestamp'] as Timestamp?)?.toDate();
+              final String message = data['message'] as String? ?? 'No details provided.';
+              final String jobTitle = data['jobTitle'] as String? ?? 'Application Update';
+              final String businessName = data['businessName'] as String? ?? 'A Business';
+              final String notificationStatus = data['status'] as String? ?? 'pending'; // e.g. 'pending', 'accepted', 'declined', 'read'
+              final String originalApplicationType = data['originalApplicationType'] as String? ?? 'application'; // 'cv' or 'message'
+
+              IconData iconData = Icons.info_outline;
+              Color iconColor = Colors.blue;
+              String statusText = notificationStatus.toUpperCase();
+              Color statusColor = Colors.orange;
+
+              if (notificationStatus == 'accepted') {
+                iconData = Icons.check_circle_outline;
+                iconColor = Colors.green;
+                statusText = 'ACCEPTED';
+                statusColor = Colors.green;
+              } else if (notificationStatus == 'declined' || notificationStatus == 'rejected') {
+                iconData = Icons.cancel_outlined;
+                iconColor = Colors.red;
+                statusText = 'DECLINED';
+                statusColor = Colors.red;
+              } else if (notificationStatus == 'read') {
+                 // Could be an accepted/declined notification that was already read
+                 // For now, treat 'read' like 'pending' for display if no specific accepted/declined status is on the notification itself
+                 // This part might need refinement based on how 'accepted'/'declined' statuses are set on these 'application_status' notifications.
+                 // If 'application_status' notifications *also* get an 'accepted' or 'declined' status field directly, use that.
+                 // For now, assuming 'read' means it was a pending item that's now viewed.
+                iconData = Icons.history;
+                iconColor = Colors.grey;
+                statusText = 'VIEWED'; // Or derive from another field if available
+                statusColor = Colors.grey;
+              } else { // pending or null
+                iconData = Icons.hourglass_empty;
+                iconColor = Colors.orange;
+                statusText = 'PENDING';
               }
 
-              if (appSnapshot.connectionState == ConnectionState.waiting) {
-                return const Center(child: CircularProgressIndicator());
-              }
-
-              if (!appSnapshot.hasData || appSnapshot.data!.docs.isEmpty) {
-                return const Center(child: Text('No applications yet'));
-              }
-
-              return ListView.builder(
-                itemCount: appSnapshot.data!.docs.length,
-                itemBuilder: (context, index) {
-                  final application = appSnapshot.data!.docs[index];
-                  final data = application.data() as Map<String, dynamic>;
-                  final timestamp = (data['timestamp'] as Timestamp?)?.toDate();
-                  final type = data['type'] as String? ?? 'message';
-
-                  // Get job details from parent
-                  final pathSegments = application.reference.path.split('/');
-                  final jobId = pathSegments[pathSegments.length - 3];
-
-                  return FutureBuilder<DocumentSnapshot>(
-                    future: FirebaseFirestore.instance
-                        .collection('JobListings')
-                        .doc(jobId)
-                        .get(),
-                    builder: (context, jobSnapshot) {
-                      if (!jobSnapshot.hasData) {
-                        return const SizedBox.shrink();
-                      }
-
-                      final jobData = jobSnapshot.data!.data() as Map<String, dynamic>?;
-                      if (jobData == null) return const SizedBox.shrink();
-
-                      return Card(
-                        margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        child: ListTile(
-                          leading: CircleAvatar(
-                            backgroundColor: type == 'cv' ? Colors.green : Colors.blue,
-                            child: Icon(
-                              type == 'cv' ? Icons.description : Icons.message,
-                              color: Colors.white,
-                            ),
-                          ),
-                          title: Text(
-                            jobData['title'] ?? 'Unknown Job',
-                            style: const TextStyle(fontWeight: FontWeight.bold),
-                          ),
-                          subtitle: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text('Business: ${jobData['restaurant'] ?? 'Unknown'}'),
-                              const SizedBox(height: 4),
-                              if (type == 'message' && data['message'] != null)
-                                Text(
-                                  'Message: ${data['message']}',
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(color: Colors.grey[600]),
-                                ),
-                              if (type == 'cv')
-                                Text(
-                                  'CV submitted',
-                                  style: TextStyle(color: Colors.grey[600]),
-                                ),
-                            ],
-                          ),
-                          trailing: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            crossAxisAlignment: CrossAxisAlignment.end,
-                            children: [
-                              Text(
-                                _getTimeAgo(timestamp),
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: Colors.grey[600],
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: Colors.orange.withOpacity(0.1),
-                                  borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(color: Colors.orange.withOpacity(0.3)),
-                                ),
-                                child: const Text(
-                                  'Pending',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: Colors.orange,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ),
-                            ],
+              return Card(
+                margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                child: ListTile(
+                  leading: CircleAvatar(
+                    backgroundColor: iconColor,
+                    child: Icon(iconData, color: Colors.white),
+                  ),
+                  title: Text(
+                    jobTitle,
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  subtitle: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('From: $businessName'),
+                      const SizedBox(height: 4),
+                      Text(
+                        message,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(color: Colors.grey[700]),
+                      ),
+                    ],
+                  ),
+                  trailing: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      if (timestamp != null) Text(_getTimeAgo(timestamp), style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+                      const SizedBox(height: 4),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: statusColor.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: statusColor.withOpacity(0.3)),
+                        ),
+                        child: Text(
+                          statusText,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: statusColor,
+                            fontWeight: FontWeight.bold,
                           ),
                         ),
-                      );
-                    },
-                  );
-                },
+                      ),
+                    ],
+                  ),
+                  onTap: () {
+                    // Optional: Navigate to chat if accepted, or show more details
+                    // For now, tapping does nothing on this screen for these notifications.
+                    print('Tapped on application status notification: ${notificationDoc.id}');
+                  },
+                ),
               );
             },
           );

@@ -21,17 +21,22 @@ class _ApplicationManagerScreenState extends State<ApplicationManagerScreen> {
 
   Future<void> _markNotificationsAsRead() async {
     try {
+      // Get all unread notifications for this user
       final notifications = await FirebaseFirestore.instance
           .collection('notifications')
           .where('userId', isEqualTo: widget.ownerId)
           .where('isRead', isEqualTo: false)
           .get();
 
-      final batch = FirebaseFirestore.instance.batch();
-      for (var doc in notifications.docs) {
-        batch.update(doc.reference, {'isRead': true});
+      if (notifications.docs.isNotEmpty) {
+        final batch = FirebaseFirestore.instance.batch();
+        for (var doc in notifications.docs) {
+          batch.update(doc.reference, {'isRead': true});
+        }
+        await batch.commit();
+
+        print("Marked ${notifications.docs.length} notifications as read");
       }
-      await batch.commit();
     } catch (e) {
       print("Error marking notifications as read: $e");
     }
@@ -69,7 +74,7 @@ class _ApplicationManagerScreenState extends State<ApplicationManagerScreen> {
       final batch = FirebaseFirestore.instance.batch();
       for (var doc in notifications.docs) {
         final type = (doc.data())['type'] as String?;
-        if (type == 'cv') {
+        if (type == 'cv' || type == 'message') {
           batch.delete(doc.reference);
         }
       }
@@ -124,6 +129,7 @@ class _ApplicationManagerScreenState extends State<ApplicationManagerScreen> {
         stream: FirebaseFirestore.instance
             .collection('notifications')
             .where('userId', isEqualTo: widget.ownerId)
+            .orderBy('timestamp', descending: true)
             .snapshots(),
         builder: (context, snapshot) {
           if (snapshot.hasError) {
@@ -142,16 +148,9 @@ class _ApplicationManagerScreenState extends State<ApplicationManagerScreen> {
           final notifications = snapshot.data!.docs
               .where((doc) {
             final type = (doc.data() as Map<String, dynamic>)['type'] as String?;
-            return type == 'cv' || type == 'message';
+            return type == 'cv' || type == 'message' || type == 'cv_application';
           })
               .toList();
-
-          notifications.sort((a, b) {
-            final aTime = (a.data() as Map<String, dynamic>)['timestamp'] as Timestamp?;
-            final bTime = (b.data() as Map<String, dynamic>)['timestamp'] as Timestamp?;
-            if (aTime == null || bTime == null) return 0;
-            return bTime.compareTo(aTime);
-          });
 
           if (notifications.isEmpty) {
             return const Center(child: Text('No notifications'));
@@ -164,32 +163,107 @@ class _ApplicationManagerScreenState extends State<ApplicationManagerScreen> {
               final data = notification.data() as Map<String, dynamic>;
               final type = data['type'] as String;
               final timestamp = (data['timestamp'] as Timestamp?)?.toDate();
+              final isRead = data['isRead'] as bool? ?? false;
+              final status = data['status'] as String?;
+
+              // Determine notification appearance based on status
+              Color cardColor = Colors.white;
+              Color borderColor = Colors.grey.shade300;
+
+              if (!isRead) {
+                cardColor = Colors.blue.shade50;
+                borderColor = Colors.blue.shade200;
+              }
+
+              if (status == 'accepted') {
+                cardColor = Colors.green.shade50;
+                borderColor = Colors.green.shade200;
+              } else if (status == 'rejected' || status == 'declined') {
+                cardColor = Colors.red.shade50;
+                borderColor = Colors.red.shade200;
+              }
 
               if (type == 'message') {
                 return Card(
                   margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  color: cardColor,
+                  shape: RoundedRectangleBorder(
+                    side: BorderSide(color: borderColor),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
                   child: Padding(
                     padding: const EdgeInsets.all(12),
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const CircleAvatar(
-                          backgroundColor: Colors.blue,
-                          child: Icon(Icons.message, color: Colors.white),
+                        CircleAvatar(
+                          backgroundColor: status == 'accepted'
+                              ? Colors.green
+                              : status == 'rejected'
+                              ? Colors.red
+                              : Colors.blue,
+                          child: Icon(
+                              status == 'accepted'
+                                  ? Icons.check
+                                  : status == 'rejected'
+                                  ? Icons.close
+                                  : Icons.message,
+                              color: Colors.white
+                          ),
                         ),
                         const SizedBox(width: 12),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(
-                                'New message from ${data['data']['applicantName'] ?? 'someone'}',
-                                style: const TextStyle(fontWeight: FontWeight.bold),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      'Message from ${data['data']?['applicantName'] ?? 'someone'}',
+                                      style: TextStyle(
+                                        fontWeight: isRead ? FontWeight.normal : FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
+                                  if (status != null)
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: status == 'accepted'
+                                            ? Colors.green
+                                            : status == 'rejected'
+                                            ? Colors.red
+                                            : Colors.orange,
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      child: Text(
+                                        status.toUpperCase(),
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ),
+                                ],
                               ),
                               const SizedBox(height: 4),
                               Text(
-                                'Regarding: ${data['data']['jobTitle'] ?? 'your job posting'}',
+                                'Regarding: ${data['data']?['jobTitle'] ?? 'your job posting'}',
                                 style: TextStyle(color: Colors.grey[600]),
+                              ),
+                              const SizedBox(height: 8),
+                              Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: Colors.grey[100],
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: Text(
+                                  data['message'] ?? 'No message content',
+                                  style: const TextStyle(fontSize: 14),
+                                ),
                               ),
                               const SizedBox(height: 4),
                               Text(
@@ -211,36 +285,65 @@ class _ApplicationManagerScreenState extends State<ApplicationManagerScreen> {
                     ),
                   ),
                 );
-              } else if (type == 'cv') {
+              } else if (type == 'cv' || type == 'cv_application') {
                 // CV notification
                 return Card(
                   margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  color: cardColor,
+                  shape: RoundedRectangleBorder(
+                    side: BorderSide(color: borderColor),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
                   child: ListTile(
-                    leading: const CircleAvatar(
-                      backgroundColor: Colors.green,
+                    leading: CircleAvatar(
+                      backgroundColor: !isRead ? Colors.green : Colors.green.shade300,
                       child: Icon(Icons.description, color: Colors.white),
                     ),
                     title: Text(
-                      'CV received from ${data['data']['applicantName'] ?? 'someone'}',
-                      style: const TextStyle(fontWeight: FontWeight.bold),
+                      'CV received from ${data['data']?['applicantName'] ?? 'someone'}',
+                      style: TextStyle(
+                        fontWeight: isRead ? FontWeight.normal : FontWeight.bold,
+                      ),
                     ),
-                    subtitle: Text(
-                      'For: ${data['data']['jobTitle'] ?? 'your job posting'}',
-                      style: TextStyle(color: Colors.grey[600]),
+                    subtitle: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'For: ${data['data']?['jobTitle'] ?? 'your job posting'}',
+                          style: TextStyle(color: Colors.grey[600]),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          _getTimeAgo(timestamp),
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey[600],
+                          ),
+                        ),
+                      ],
                     ),
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        IconButton(
-                          icon: const Icon(Icons.download),
-                          onPressed: () async {
-                            final cvUrl = data['data']['cvUrl'];
-                            if (cvUrl != null) {
-                              await launchUrl(Uri.parse(cvUrl));
-                            }
-                          },
-                          tooltip: 'Download CV',
-                        ),
+                        if (data['data']?['cvUrl'] != null)
+                          IconButton(
+                            icon: const Icon(Icons.download),
+                            onPressed: () async {
+                              final cvUrl = data['data']['cvUrl'];
+                              if (cvUrl != null) {
+                                try {
+                                  await launchUrl(Uri.parse(cvUrl));
+                                } catch (e) {
+                                  if (mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(content: Text('Could not open CV: $e')),
+                                    );
+                                  }
+                                }
+                              }
+                            },
+                            tooltip: 'Download CV',
+                          ),
                         IconButton(
                           icon: const Icon(Icons.delete_outline),
                           onPressed: () => _deleteNotification(notification.id),

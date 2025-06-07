@@ -95,7 +95,8 @@ class _ChatListScreenState extends State<ChatListScreen> with SingleTickerProvid
         'lastMessage': initialMessage,
         'lastMessageTime': FieldValue.serverTimestamp(),
         'lastSenderId': applicantId,
-        'unreadCount': 1,
+        'ownerUnreadCount': 1,
+        'applicantUnreadCount': 0,
         'createdAt': FieldValue.serverTimestamp(),
         'status': 'active',
       });
@@ -110,11 +111,12 @@ class _ChatListScreenState extends State<ChatListScreen> with SingleTickerProvid
         'senderName': applicantName,
       });
 
-      // 3. Update notification status instead of deleting
+      // 3. Update notification status to 'accepted' and mark as read
       DocumentReference notificationRefDoc = FirebaseFirestore.instance
           .collection('notifications').doc(notificationId);
       batch.update(notificationRefDoc, {
         'status': 'accepted',
+        'isRead': true,
         'processedAt': FieldValue.serverTimestamp(),
         'chatRoomId': chatRoomId,
       });
@@ -181,11 +183,12 @@ class _ChatListScreenState extends State<ChatListScreen> with SingleTickerProvid
         'originalNotificationId': notificationId,
       });
 
-      // 2. Update notification status instead of deleting
+      // 2. Update notification status to 'rejected' and mark as read
       DocumentReference notificationRefDoc = FirebaseFirestore.instance
           .collection('notifications').doc(notificationId);
       batch.update(notificationRefDoc, {
-        'status': 'declined',
+        'status': 'rejected',
+        'isRead': true,
         'processedAt': FieldValue.serverTimestamp(),
       });
 
@@ -304,9 +307,6 @@ class _ChatListScreenState extends State<ChatListScreen> with SingleTickerProvid
           .orderBy('timestamp', descending: true)
           .snapshots(),
       builder: (context, snapshot) {
-        print("DEBUG: Unread messages stream - ConnectionState: ${snapshot.connectionState}");
-        print("DEBUG: Has data: ${snapshot.hasData}, Has error: ${snapshot.hasError}");
-
         if (snapshot.hasError) {
           print("ERROR in unread messages: ${snapshot.error}");
           return Center(child: Text('Error: ${snapshot.error}'));
@@ -320,14 +320,13 @@ class _ChatListScreenState extends State<ChatListScreen> with SingleTickerProvid
           return const Center(child: Text('No new applications'));
         }
 
-        // Filter for unprocessed messages (no status field or null status)
+        // Filter for unprocessed messages (no status or status is not processed)
         final unprocessedMessages = snapshot.data!.docs.where((doc) {
           final data = doc.data() as Map<String, dynamic>;
-          // Show only messages that haven't been processed (no status or null status)
-          return !data.containsKey('status') || data['status'] == null;
+          final status = data['status'] as String?;
+          // Show only messages that haven't been processed
+          return status == null || (!['accepted', 'rejected', 'declined'].contains(status));
         }).toList();
-
-        print("DEBUG: Total notifications: ${snapshot.data!.docs.length}, Unprocessed: ${unprocessedMessages.length}");
 
         // Update count
         final newCount = unprocessedMessages.length;
@@ -474,10 +473,10 @@ class _ChatListScreenState extends State<ChatListScreen> with SingleTickerProvid
             final lastSenderId = data['lastSenderId'] as String?;
             final lastMessageTime = (data['lastMessageTime'] as Timestamp?)
                 ?.toDate();
-            final unreadCount = data['unreadCount'] as int? ?? 0;
+            final ownerUnreadCount = data['ownerUnreadCount'] as int? ?? 0;
 
             final isLastMessageMine = lastSenderId == currentUser?.uid;
-            final hasUnreadMessages = !isLastMessageMine && unreadCount > 0;
+            final hasUnreadMessages = !isLastMessageMine && ownerUnreadCount > 0;
 
             return Dismissible(
               key: Key(chat.id),
@@ -522,7 +521,7 @@ class _ChatListScreenState extends State<ChatListScreen> with SingleTickerProvid
                               minHeight: 16,
                             ),
                             child: Text(
-                              unreadCount.toString(),
+                              ownerUnreadCount.toString(),
                               style: const TextStyle(
                                 color: Colors.white,
                                 fontSize: 10,
