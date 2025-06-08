@@ -3,6 +3,11 @@ import 'package:hive_flutter/models/job.dart';
 import '../utils/job_marker_utils.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:hive_flutter/user_applications_screen.dart';
+import 'package:hive_flutter/chat_screen.dart';
+import 'package:firebase_storage/firebase_storage.dart';
+import 'package:file_picker/file_picker.dart';
+import 'dart:io';
 
 class JobDetailsSheet extends StatefulWidget {
   final Job job;
@@ -45,6 +50,165 @@ class _JobDetailsSheetState extends State<JobDetailsSheet> {
     });
   }
 
+  // Updated _checkForExistingApplication for both job_detail_screen.dart and job_details_sheet.dart
+
+  Future<bool> _checkForExistingApplication() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return false;
+
+    try {
+      // Check for existing notifications (pending applications)
+      final existingNotifications = await FirebaseFirestore.instance
+          .collection('notifications')
+          .where('senderId', isEqualTo: user.uid)
+          .where('userId', isEqualTo: widget.job.ownerId)
+          .get();
+
+      for (var doc in existingNotifications.docs) {
+        final data = doc.data();
+        final jobId = data['data']?['jobId'] as String?;
+        final status = data['status'] as String?;
+
+        if (jobId == widget.job.id) {
+          if (status == null || status == 'pending') {
+            // Found pending application - prevent duplicate
+            print('Found pending application for job ${widget.job.id}');
+            return true;
+          } else if (status == 'accepted') {
+            // Found accepted application - redirect to chat
+            print('Found accepted application for job ${widget.job.id}');
+            final chatRoomId = data['chatRoomId'] as String?;
+            if (chatRoomId != null && mounted) {
+              _navigateToExistingChat(chatRoomId);
+              return true;
+            }
+          } else if (status == 'rejected' || status == 'declined') {
+            // Application was rejected - allow new application
+            print('Found rejected application for job ${widget.job.id} - allowing new application');
+            continue; // Don't prevent, allow new application
+          }
+        }
+      }
+
+      // Check for existing chats (active conversations)
+      final existingChats = await FirebaseFirestore.instance
+          .collection('chats')
+          .where('participants', arrayContains: user.uid)
+          .where('ownerId', isEqualTo: widget.job.ownerId)
+          .where('jobId', isEqualTo: widget.job.id)
+          .get();
+
+      if (existingChats.docs.isNotEmpty && mounted) {
+        print('Found existing chat for job ${widget.job.id}');
+        _navigateToExistingChat(existingChats.docs.first.id);
+        return true;
+      }
+
+      print('No existing application found for job ${widget.job.id} - allowing new application');
+      return false;
+    } catch (e) {
+      print('Error checking for existing application: $e');
+      return false;
+    }
+  }
+
+  void _navigateToExistingChat(String chatRoomId) {
+    // Close the bottom sheet first
+    Navigator.of(context).pop();
+
+    // Then navigate to chat
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => ChatScreen(
+          chatRoomId: chatRoomId,
+          jobTitle: widget.job.title,
+        ),
+      ),
+    );
+  }
+
+  void _showDuplicateApplicationDialog() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Row(
+            children: [
+              Icon(Icons.info_outline, color: Colors.orange),
+              SizedBox(width: 8),
+              Text('Application Exists'),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'You already have an application with ${widget.job.restaurant} for this position.',
+                style: TextStyle(fontSize: 16),
+              ),
+              SizedBox(height: 12),
+              Text(
+                'What would you like to do?',
+                style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                Navigator.of(context).pop();
+                await _findAndNavigateToApplication();
+              },
+              child: Text('View Application'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _findAndNavigateToApplication() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    try {
+      // First check for active chats
+      final chats = await FirebaseFirestore.instance
+          .collection('chats')
+          .where('participants', arrayContains: user.uid)
+          .where('ownerId', isEqualTo: widget.job.ownerId)
+          .where('jobId', isEqualTo: widget.job.id)
+          .get();
+
+      if (chats.docs.isNotEmpty) {
+        _navigateToExistingChat(chats.docs.first.id);
+        return;
+      }
+
+      // If no chat, close bottom sheet and navigate to user applications screen
+      Navigator.of(context).pop(); // Close bottom sheet
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => const UserApplicationsScreen(),
+        ),
+      );
+    } catch (e) {
+      print('Error finding application: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error finding your application: $e')),
+        );
+      }
+    }
+  }
+
   void _showMessageDialog() {
     final messageController = TextEditingController();
     showDialog(
@@ -69,10 +233,21 @@ class _JobDetailsSheetState extends State<JobDetailsSheet> {
           ElevatedButton(
             onPressed: () async {
               if (messageController.text.trim().isNotEmpty) {
+                final messageToSend = messageController.text.trim();
+
+                // Close dialog first
                 Navigator.pop(dialogContext);
+
+                // Check for existing application before sending
+                final hasExisting = await _checkForExistingApplication();
+                if (hasExisting) {
+                  _showDuplicateApplicationDialog();
+                  return;
+                }
+
                 setState(() => _isSending = true);
                 widget.setSending(true);
-                await _sendMessage(messageController.text.trim());
+                await _sendMessage(messageToSend);
               } else {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
@@ -187,27 +362,143 @@ class _JobDetailsSheetState extends State<JobDetailsSheet> {
   }
 
   Future<void> _uploadCV() async {
-    // Implementation for CV upload
-    // This should be similar to the existing CV upload functionality
-    // but ensure it creates proper notifications
+    // Check for existing application before uploading CV
+    final hasExisting = await _checkForExistingApplication();
+    if (hasExisting) {
+      _showDuplicateApplicationDialog();
+      return;
+    }
+
     setState(() => _isUploading = true);
     widget.setUploading(true);
 
-    // Placeholder for CV upload logic
-    // You should implement the actual CV upload here
-
-    await Future.delayed(const Duration(seconds: 2)); // Simulate upload
-
-    if (mounted) {
-      setState(() => _isUploading = false);
-      widget.setUploading(false);
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('CV upload functionality needs to be implemented'),
-          backgroundColor: Colors.orange,
-        ),
+    try {
+      FilePickerResult? result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['pdf', 'doc', 'docx'],
       );
+
+      if (!mounted) return;
+      if (result == null) {
+        setState(() => _isUploading = false);
+        widget.setUploading(false);
+        return;
+      }
+
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Please login to apply')),
+          );
+          setState(() => _isUploading = false);
+          widget.setUploading(false);
+        }
+        return;
+      }
+
+      final userDataSnapshot = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
+      if (!mounted) return;
+      final applicantName = userDataSnapshot.data()?['username'] ?? 'Anonymous Applicant';
+
+      final file = File(result.files.single.path!);
+      final fileName = '${DateTime.now().millisecondsSinceEpoch}_${result.files.single.name}';
+      final storageRef = FirebaseStorage.instance
+          .ref()
+          .child('cvs')
+          .child(widget.job.id)
+          .child(user.uid)
+          .child(fileName);
+
+      await storageRef.putFile(file);
+      if (!mounted) return;
+      final downloadUrl = await storageRef.getDownloadURL();
+      if (!mounted) return;
+
+      final WriteBatch batch = FirebaseFirestore.instance.batch();
+
+      // 1. Create application in JobListings subcollection
+      final applicationRef = FirebaseFirestore.instance
+          .collection('JobListings')
+          .doc(widget.job.id)
+          .collection('Applications')
+          .doc();
+      batch.set(applicationRef, {
+        'userId': user.uid,
+        'name': applicantName,
+        'status': 'pending',
+        'timestamp': FieldValue.serverTimestamp(),
+        'cvUrl': downloadUrl,
+        'fileName': result.files.single.name,
+        'type': 'cv',
+      });
+
+      // 2. Create notification for the owner
+      final notificationRef = FirebaseFirestore.instance.collection('notifications').doc();
+      batch.set(notificationRef, {
+        'userId': widget.job.ownerId,
+        'senderId': user.uid,
+        'title': 'New CV Application for ${widget.job.title}',
+        'message': '$applicantName submitted a CV for ${widget.job.title}.',
+        'type': 'cv_application',
+        'data': {
+          'jobId': widget.job.id,
+          'jobTitle': widget.job.title,
+          'businessName': widget.job.restaurant,
+          'applicantName': applicantName,
+          'applicationId': applicationRef.id,
+          'cvUrl': downloadUrl,
+        },
+        'timestamp': FieldValue.serverTimestamp(),
+        'isRead': false,
+      });
+
+      // 3. Create message in user_messages for tracking
+      final userMessageRef = FirebaseFirestore.instance.collection('user_messages').doc();
+      batch.set(userMessageRef, {
+        'userId': user.uid,
+        'status': 'pending',
+        'message': 'CV submitted for ${widget.job.title}',
+        'data': {
+          'jobTitle': widget.job.title,
+          'businessName': widget.job.restaurant,
+          'jobId': widget.job.id,
+          'ownerId': widget.job.ownerId,
+          'applicationType': 'cv',
+          'applicationId': applicationRef.id,
+        },
+        'timestamp': FieldValue.serverTimestamp(),
+      });
+
+      await batch.commit();
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('CV uploaded successfully!')),
+        );
+
+        // Close the bottom sheet after success
+        Future.delayed(const Duration(milliseconds: 500), () {
+          if (mounted) {
+            Navigator.of(context).pop();
+          }
+        });
+      }
+    } catch (e) {
+      print('Error uploading CV: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error uploading CV: $e')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isUploading = false);
+        widget.setUploading(false);
+      }
     }
   }
 
@@ -223,7 +514,7 @@ class _JobDetailsSheetState extends State<JobDetailsSheet> {
         child: GestureDetector(
           onTap: () {}, // Prevent dismissal when tapping on the sheet itself
           child: DraggableScrollableSheet(
-            initialChildSize: 0.35, // Slightly increased to accommodate buttons
+            initialChildSize: 0.35,
             minChildSize: 0.35,
             maxChildSize: 0.9,
             snap: true,
@@ -399,7 +690,7 @@ class _JobDetailsSheetState extends State<JobDetailsSheet> {
       children: [
         Text(
           widget.job.description,
-          maxLines: 2, // Reduced to make room for buttons
+          maxLines: 2,
           overflow: TextOverflow.ellipsis,
           style: TextStyle(
             fontSize: 14,
@@ -450,7 +741,6 @@ class _JobDetailsSheetState extends State<JobDetailsSheet> {
   }
 
   Widget _buildButtons(BuildContext context, {bool isCompact = false}) {
-    // Use smaller padding for compact mode
     final verticalPadding = isCompact ? 8.0 : 12.0;
     final fontSize = isCompact ? 14.0 : 16.0;
 

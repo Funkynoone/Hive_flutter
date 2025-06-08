@@ -4,8 +4,9 @@ import 'package:hive_flutter/models/job.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart';
+import 'package:hive_flutter/user_applications_screen.dart';
+import 'package:hive_flutter/chat_screen.dart';
 import 'dart:io';
-// Assuming this service exists and works
 
 class JobDetailScreen extends StatefulWidget {
   final Job job;
@@ -79,7 +80,225 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
     }
   }
 
+  Future<bool> _checkForExistingApplication() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return false;
+
+    try {
+      // Check for existing notifications (pending applications)
+      final existingNotifications = await FirebaseFirestore.instance
+          .collection('notifications')
+          .where('senderId', isEqualTo: user.uid)
+          .where('userId', isEqualTo: widget.job.ownerId)
+          .get();
+
+      for (var doc in existingNotifications.docs) {
+        final data = doc.data();
+        final jobId = data['data']?['jobId'] as String?;
+        final status = data['status'] as String?;
+
+        if (jobId == widget.job.id) {
+          if (status == null || status == 'pending') {
+            // Found pending application - prevent duplicate
+            print('Found pending application for job ${widget.job.id}');
+            return true;
+          } else if (status == 'accepted') {
+            // Found accepted application - redirect to chat
+            print('Found accepted application for job ${widget.job.id}');
+            final chatRoomId = data['chatRoomId'] as String?;
+            if (chatRoomId != null && mounted) {
+              _navigateToExistingChat(chatRoomId);
+              return true;
+            }
+          } else if (status == 'rejected' || status == 'declined') {
+            // Application was rejected - allow new application
+            print('Found rejected application for job ${widget.job.id} - allowing new application');
+            continue; // Don't prevent, allow new application
+          }
+        }
+      }
+
+      // Check for existing chats (active conversations)
+      final existingChats = await FirebaseFirestore.instance
+          .collection('chats')
+          .where('participants', arrayContains: user.uid)
+          .where('ownerId', isEqualTo: widget.job.ownerId)
+          .where('jobId', isEqualTo: widget.job.id)
+          .get();
+
+      if (existingChats.docs.isNotEmpty && mounted) {
+        print('Found existing chat for job ${widget.job.id}');
+        _navigateToExistingChat(existingChats.docs.first.id);
+        return true;
+      }
+
+      print('No existing application found for job ${widget.job.id} - allowing new application');
+      return false;
+    } catch (e) {
+      print('Error checking for existing application: $e');
+      return false;
+    }
+  }
+
+  void _navigateToExistingChat(String chatRoomId) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => ChatScreen(
+          chatRoomId: chatRoomId,
+          jobTitle: widget.job.title,
+        ),
+      ),
+    );
+  }
+
+  void _showDuplicateApplicationDialog() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Row(
+            children: [
+              Icon(Icons.info_outline, color: Colors.orange),
+              SizedBox(width: 8),
+              Text('Application Exists'),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'You already have an application with ${widget.job.restaurant} for this position.',
+                style: TextStyle(fontSize: 16),
+              ),
+              SizedBox(height: 12),
+              Text(
+                'What would you like to do?',
+                style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                Navigator.of(context).pop();
+                await _findAndNavigateToApplication();
+              },
+              child: Text('View Application'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _findAndNavigateToApplication() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    try {
+      // First check for active chats
+      final chats = await FirebaseFirestore.instance
+          .collection('chats')
+          .where('participants', arrayContains: user.uid)
+          .where('ownerId', isEqualTo: widget.job.ownerId)
+          .where('jobId', isEqualTo: widget.job.id)
+          .get();
+
+      if (chats.docs.isNotEmpty) {
+        _navigateToExistingChat(chats.docs.first.id);
+        return;
+      }
+
+      // If no chat, navigate to user applications screen
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => const UserApplicationsScreen(),
+        ),
+      );
+    } catch (e) {
+      print('Error finding application: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error finding your application: $e')),
+        );
+      }
+    }
+  }
+
+  void _showMessageDialog() {
+    final messageController = TextEditingController();
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Send Message to Owner'),
+        content: TextField(
+          controller: messageController,
+          decoration: const InputDecoration(
+            hintText: 'Write your message...',
+            border: OutlineInputBorder(),
+          ),
+          maxLines: 3,
+          autofocus: true,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              if (messageController.text.trim().isNotEmpty) {
+                final messageToSend = messageController.text.trim();
+
+                // Close dialog first
+                Navigator.pop(dialogContext);
+
+                // Check for existing application before sending
+                final hasExisting = await _checkForExistingApplication();
+                if (hasExisting) {
+                  _showDuplicateApplicationDialog();
+                  return;
+                }
+
+                // Add a small delay to ensure dialog is closed
+                await Future.delayed(const Duration(milliseconds: 100));
+
+                // Send the message
+                await _sendApplication(messageToSend);
+              } else {
+                // Show error in dialog context
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Message cannot be empty.'),
+                    duration: Duration(seconds: 2),
+                    backgroundColor: Colors.orange,
+                  ),
+                );
+              }
+            },
+            child: const Text('Send'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _uploadCV() async {
+    // Check for existing application before uploading CV
+    final hasExisting = await _checkForExistingApplication();
+    if (hasExisting) {
+      _showDuplicateApplicationDialog();
+      return;
+    }
+
     // Check if mounted at the beginning of the async operation
     if (!mounted) return;
     setState(() => _isUploading = true);
@@ -166,9 +385,8 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
         'isRead': false,
       });
 
-
       // 3. Create message in user_messages for the applicant (for their Pending tab)
-      final userMessageRef = FirebaseFirestore.instance.collection('user_messages').doc(); // Auto-ID or custom
+      final userMessageRef = FirebaseFirestore.instance.collection('user_messages').doc();
       batch.set(userMessageRef, {
         'userId': user.uid, // The applicant themselves
         'status': 'pending',
@@ -338,58 +556,6 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
         );
       }
     }
-  }
-
-  void _showMessageDialog() {
-    final messageController = TextEditingController();
-    showDialog(
-      context: context,
-      barrierDismissible: false, // Prevent accidental dismissal
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Send Message to Owner'),
-        content: TextField(
-          controller: messageController,
-          decoration: const InputDecoration(
-            hintText: 'Write your message...',
-            border: OutlineInputBorder(),
-          ),
-          maxLines: 3,
-          autofocus: true,
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              if (messageController.text.trim().isNotEmpty) {
-                final messageToSend = messageController.text.trim();
-
-                // Close dialog first
-                Navigator.pop(dialogContext);
-
-                // Add a small delay to ensure dialog is closed
-                await Future.delayed(const Duration(milliseconds: 100));
-
-                // Send the message
-                await _sendApplication(messageToSend);
-              } else {
-                // Show error in dialog context
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Message cannot be empty.'),
-                    duration: Duration(seconds: 2),
-                    backgroundColor: Colors.orange,
-                  ),
-                );
-              }
-            },
-            child: const Text('Send'),
-          ),
-        ],
-      ),
-    );
   }
 
   @override

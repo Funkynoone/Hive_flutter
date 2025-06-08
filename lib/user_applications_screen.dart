@@ -276,89 +276,142 @@ class _UserApplicationsScreenState extends State<UserApplicationsScreen> with Si
     );
   }
 
+  // Alternative approach for _buildMyApplicationsTab in user_applications_screen.dart
+// Replace the existing _buildMyApplicationsTab method with this:
+
   Widget _buildMyApplicationsTab() {
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
-          .collection('JobListings')
+          .collection('user_messages')
+          .where('userId', isEqualTo: currentUser?.uid)
+          .orderBy('timestamp', descending: true)
           .snapshots(),
-      builder: (context, jobSnapshot) {
-        if (jobSnapshot.hasError) {
-          return Center(child: Text('Error: ${jobSnapshot.error}'));
+      builder: (context, userMessageSnapshot) {
+        if (userMessageSnapshot.hasError) {
+          return Center(child: Text('Error: ${userMessageSnapshot.error}'));
         }
 
-        if (jobSnapshot.connectionState == ConnectionState.waiting) {
+        if (userMessageSnapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
         }
 
-        // Get all applications for the current user
-        return StreamBuilder<QuerySnapshot>(
-          stream: FirebaseFirestore.instance
-              .collectionGroup('Applications')
-              .where('userId', isEqualTo: currentUser?.uid)
-              .orderBy('timestamp', descending: true)
-              .snapshots(),
-          builder: (context, appSnapshot) {
-            if (appSnapshot.hasError) {
-              return Center(child: Text('Error: ${appSnapshot.error}'));
-            }
+        if (!userMessageSnapshot.hasData || userMessageSnapshot.data!.docs.isEmpty) {
+          return const Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.work_outline, size: 64, color: Colors.grey),
+                SizedBox(height: 16),
+                Text(
+                  'No applications yet',
+                  style: TextStyle(fontSize: 16, color: Colors.grey),
+                ),
+                SizedBox(height: 8),
+                Text(
+                  'Start applying for jobs to see them here',
+                  style: TextStyle(color: Colors.grey),
+                ),
+              ],
+            ),
+          );
+        }
 
-            if (appSnapshot.connectionState == ConnectionState.waiting) {
-              return const Center(child: CircularProgressIndicator());
-            }
+        return ListView.builder(
+          itemCount: userMessageSnapshot.data!.docs.length,
+          itemBuilder: (context, index) {
+            final userMessage = userMessageSnapshot.data!.docs[index];
+            final data = userMessage.data() as Map<String, dynamic>;
+            final timestamp = (data['timestamp'] as Timestamp?)?.toDate();
 
-            if (!appSnapshot.hasData || appSnapshot.data!.docs.isEmpty) {
-              return const Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
+            return Card(
+              margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              child: ListTile(
+                leading: CircleAvatar(
+                  backgroundColor: data['data']?['applicationType'] == 'cv' ? Colors.green : Colors.blue,
+                  child: Icon(
+                    data['data']?['applicationType'] == 'cv' ? Icons.description : Icons.message,
+                    color: Colors.white,
+                  ),
+                ),
+                title: Text(
+                  data['data']?['jobTitle'] ?? 'Unknown Job',
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+                subtitle: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Icon(Icons.work_outline, size: 64, color: Colors.grey),
-                    SizedBox(height: 16),
+                    Text('Business: ${data['data']?['businessName'] ?? 'Unknown'}'),
+                    const SizedBox(height: 4),
                     Text(
-                      'No applications yet',
-                      style: TextStyle(fontSize: 16, color: Colors.grey),
-                    ),
-                    SizedBox(height: 8),
-                    Text(
-                      'Start applying for jobs to see them here',
-                      style: TextStyle(color: Colors.grey),
+                      data['message'] ?? 'Application submitted',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(color: Colors.grey[600]),
                     ),
                   ],
                 ),
-              );
-            }
-
-            return ListView.builder(
-              itemCount: appSnapshot.data!.docs.length,
-              itemBuilder: (context, index) {
-                final application = appSnapshot.data!.docs[index];
-                final data = application.data() as Map<String, dynamic>;
-
-                // Get job details from parent
-                final pathSegments = application.reference.path.split('/');
-                final jobId = pathSegments[pathSegments.length - 3];
-
-                return FutureBuilder<DocumentSnapshot>(
-                  future: FirebaseFirestore.instance
-                      .collection('JobListings')
-                      .doc(jobId)
-                      .get(),
-                  builder: (context, jobSnapshot) {
-                    if (!jobSnapshot.hasData) {
-                      return const SizedBox.shrink();
-                    }
-
-                    final jobData = jobSnapshot.data!.data() as Map<String, dynamic>?;
-                    if (jobData == null) return const SizedBox.shrink();
-
-                    return _buildApplicationCard(application, jobData);
-                  },
-                );
-              },
+                trailing: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      _getTimeAgo(timestamp),
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey[600],
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: _getStatusColor(data['status']).withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: _getStatusColor(data['status']).withOpacity(0.3)),
+                      ),
+                      child: Text(
+                        _getStatusText(data['status']),
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: _getStatusColor(data['status']),
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             );
           },
         );
       },
     );
+  }
+
+  Color _getStatusColor(String? status) {
+    switch (status) {
+      case 'accepted':
+        return Colors.green;
+      case 'rejected':
+      case 'declined':
+        return Colors.red;
+      case 'pending':
+      default:
+        return Colors.orange;
+    }
+  }
+
+  String _getStatusText(String? status) {
+    switch (status) {
+      case 'accepted':
+        return 'Accepted';
+      case 'rejected':
+      case 'declined':
+        return 'Declined';
+      case 'pending':
+      default:
+        return 'Pending';
+    }
   }
 
   @override
