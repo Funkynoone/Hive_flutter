@@ -79,10 +79,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Widget _buildChatButton() {
     final currentUser = FirebaseAuth.instance.currentUser;
-    if (currentUser == null) return IconButton(
+    if (currentUser == null) {
+      return IconButton(
       icon: const Icon(Icons.chat_bubble_outline),
       onPressed: () {},
     );
+    }
 
     if (isBusinessOwner) {
       // For business owners: count unprocessed message notifications
@@ -231,6 +233,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
+  // Updated _buildNotificationButton method for dashboard_screen.dart
   Widget _buildNotificationButton() {
     final currentUser = FirebaseAuth.instance.currentUser;
     if (currentUser == null) return IconButton(
@@ -247,19 +250,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
       builder: (context, snapshot) {
         int unreadCount = 0;
         if (snapshot.hasData) {
-          // Count only unread notifications of relevant types
-          unreadCount = snapshot.data!.docs.where((doc) {
-            final data = doc.data() as Map<String, dynamic>;
-            final type = data['type'] as String?;
-
-            if (isBusinessOwner) {
-              // For business owners: count CV applications and message notifications
+          if (isBusinessOwner) {
+            // For business owners: count CV applications and message notifications
+            unreadCount = snapshot.data!.docs.where((doc) {
+              final data = doc.data() as Map<String, dynamic>;
+              final type = data['type'] as String?;
               return type == 'cv' || type == 'cv_application' || type == 'message';
-            } else {
-              // For regular users: count all unread notifications
-              return true;
-            }
-          }).length;
+            }).length;
+          } else {
+            // For regular users: count application status updates and other notifications
+            unreadCount = snapshot.data!.docs.where((doc) {
+              final data = doc.data() as Map<String, dynamic>;
+              final type = data['type'] as String?;
+              return type == 'application_status' || type == 'cv' || type == 'message';
+            }).length;
+          }
         }
 
         return Stack(

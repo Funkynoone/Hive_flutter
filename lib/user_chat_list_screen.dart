@@ -40,7 +40,7 @@ class _UserChatListScreenState extends State<UserChatListScreen> with SingleTick
           .get()
           .then((snapshot) {
         final pendingCount = snapshot.docs.where((doc) {
-          final data = doc.data() as Map<String, dynamic>;
+          final data = doc.data();
           final status = data['status'] as String?;
           // Count only unprocessed notifications
           return status == null || (!['accepted', 'rejected', 'declined'].contains(status));

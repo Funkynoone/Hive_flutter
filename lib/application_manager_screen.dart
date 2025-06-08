@@ -297,7 +297,7 @@ class _ApplicationManagerScreenState extends State<ApplicationManagerScreen> {
                   child: ListTile(
                     leading: CircleAvatar(
                       backgroundColor: !isRead ? Colors.green : Colors.green.shade300,
-                      child: Icon(Icons.description, color: Colors.white),
+                      child: const Icon(Icons.description, color: Colors.white),
                     ),
                     title: Text(
                       'CV received from ${data['data']?['applicantName'] ?? 'someone'}',

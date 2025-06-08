@@ -56,6 +56,7 @@ class _ChatListScreenState extends State<ChatListScreen> with SingleTickerProvid
     }
   }
 
+  // Updated _acceptMessage method in chat_list_screen.dart
   Future<void> _acceptMessage(Map<String, dynamic> originalNotificationData,
       String notificationId) async {
     final ownerUid = currentUser!.uid;
@@ -111,7 +112,7 @@ class _ChatListScreenState extends State<ChatListScreen> with SingleTickerProvid
         'senderName': applicantName,
       });
 
-      // 3. Update notification status to 'accepted' and mark as read
+      // 3. Update original notification status to 'accepted' and mark as read
       DocumentReference notificationRefDoc = FirebaseFirestore.instance
           .collection('notifications').doc(notificationId);
       batch.update(notificationRefDoc, {
@@ -119,6 +120,28 @@ class _ChatListScreenState extends State<ChatListScreen> with SingleTickerProvid
         'isRead': true,
         'processedAt': FieldValue.serverTimestamp(),
         'chatRoomId': chatRoomId,
+      });
+
+      // 4. CREATE NOTIFICATION FOR USER ABOUT ACCEPTANCE
+      DocumentReference userNotificationRef = FirebaseFirestore.instance
+          .collection('notifications').doc();
+      batch.set(userNotificationRef, {
+        'userId': applicantId, // Send to the applicant
+        'senderId': ownerUid,   // From the business owner
+        'type': 'application_status',
+        'title': 'Application Accepted!',
+        'message': 'Your application for $jobTitle at $businessName has been accepted. You can now chat with the employer.',
+        'data': {
+          'jobId': jobId,
+          'jobTitle': jobTitle,
+          'businessName': businessName,
+          'ownerId': ownerUid,
+          'chatRoomId': chatRoomId,
+          'status': 'accepted',
+          'originalNotificationId': notificationId,
+        },
+        'timestamp': FieldValue.serverTimestamp(),
+        'isRead': false,
       });
 
       await batch.commit();
@@ -148,6 +171,7 @@ class _ChatListScreenState extends State<ChatListScreen> with SingleTickerProvid
     }
   }
 
+// Updated _rejectMessage method in chat_list_screen.dart
   Future<void> _rejectMessage(Map<String, dynamic> originalNotificationData,
       String notificationId) async {
     final applicantId = originalNotificationData['senderId'] as String?;
@@ -183,13 +207,34 @@ class _ChatListScreenState extends State<ChatListScreen> with SingleTickerProvid
         'originalNotificationId': notificationId,
       });
 
-      // 2. Update notification status to 'rejected' and mark as read
+      // 2. Update original notification status to 'rejected' and mark as read
       DocumentReference notificationRefDoc = FirebaseFirestore.instance
           .collection('notifications').doc(notificationId);
       batch.update(notificationRefDoc, {
         'status': 'rejected',
         'isRead': true,
         'processedAt': FieldValue.serverTimestamp(),
+      });
+
+      // 3. CREATE NOTIFICATION FOR USER ABOUT REJECTION
+      DocumentReference userNotificationRef = FirebaseFirestore.instance
+          .collection('notifications').doc();
+      batch.set(userNotificationRef, {
+        'userId': applicantId, // Send to the applicant
+        'senderId': ownerUid,   // From the business owner
+        'type': 'application_status',
+        'title': 'Application Update',
+        'message': 'Your application for $jobTitle at $businessName was not selected this time. Keep applying!',
+        'data': {
+          'jobId': jobId,
+          'jobTitle': jobTitle,
+          'businessName': businessName,
+          'ownerId': ownerUid,
+          'status': 'declined',
+          'originalNotificationId': notificationId,
+        },
+        'timestamp': FieldValue.serverTimestamp(),
+        'isRead': false,
       });
 
       await batch.commit();
@@ -280,7 +325,7 @@ class _ChatListScreenState extends State<ChatListScreen> with SingleTickerProvid
           indicatorWeight: 3,
           tabs: [
             Tab(text: 'Unread ($_unreadMessagesCount)'),
-            Tab(text: 'Active Chats'),
+            const Tab(text: 'Active Chats'),
           ],
         ),
       ),
