@@ -400,6 +400,7 @@ class _UserChatListScreenState extends State<UserChatListScreen> with SingleTick
     );
   }
 
+
   Widget _buildDeclinedTab() {
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
+import 'splash_screen.dart';  // Add this import
 import 'auth_wrapper.dart';
 import 'login_screen.dart';
 
@@ -45,7 +46,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Hive Flutter',
+      title: 'Hive',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         primarySwatch: Colors.blue,
@@ -83,18 +84,24 @@ class MyApp extends StatelessWidget {
           fillColor: Colors.grey[50],
         ),
       ),
-      initialRoute: '/',
+      // Change initial route to splash screen
+      initialRoute: '/splash',
       routes: {
+        '/splash': (context) => const SplashScreen(),  // Add splash route
         '/': (context) => const AuthWrapper(),
         '/login': (context) => const LoginScreen(),
       },
       onUnknownRoute: (settings) {
         return MaterialPageRoute(
-          builder: (context) => const AuthWrapper(),
+          builder: (context) => const SplashScreen(),  // Changed to splash
         );
       },
       onGenerateRoute: (settings) {
         switch (settings.name) {
+          case '/splash':
+            return MaterialPageRoute(
+              builder: (context) => const SplashScreen(),
+            );
           case '/':
             return MaterialPageRoute(
               builder: (context) => const AuthWrapper(),
@@ -105,7 +112,7 @@ class MyApp extends StatelessWidget {
             );
           default:
             return MaterialPageRoute(
-              builder: (context) => const AuthWrapper(),
+              builder: (context) => const SplashScreen(),
             );
         }
       },

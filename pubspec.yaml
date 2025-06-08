@@ -41,6 +41,9 @@ dependencies:
   # HTTP - Updated
   http: ^1.1.2
 
+  # Video
+  video_player: ^2.8.2
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -58,3 +61,4 @@ flutter:
 
   assets:
     - assets/profileimage.png
+    - assets/images/logo.png
