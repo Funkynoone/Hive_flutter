@@ -4,12 +4,13 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 import 'editpersonalinfo_screen.dart';
-import 'package:hive_flutter/components/delete_account.dart'; // Add this import (adjust path as needed)
+import 'package:hive_flutter/components/delete_account.dart';
 
 class ProfileScreen extends StatefulWidget {
   final VoidCallback onLogout;
 
   const ProfileScreen({super.key, required this.onLogout});
+
   @override
   _ProfileScreenState createState() => _ProfileScreenState();
 }
@@ -18,10 +19,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
   User? user = FirebaseAuth.instance.currentUser;
   FirebaseFirestore firestore = FirebaseFirestore.instance;
 
-  late String _userName;
-  late String _userEmail;
-  late String _userPhone;
+  // Make these nullable and provide default values
+  String? _userName;
+  String? _userEmail;
+  String? _userPhone;
   ImageProvider? _profileImage = const AssetImage('assets/profileimage.png');
+  bool _isLoading = true; // Add loading state
 
   @override
   void initState() {
@@ -30,13 +33,37 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _fetchUserData() async {
-    if (user != null) {
-      var userData = await firestore.collection('users').doc(user!.uid).get();
-      setState(() {
-        _userName = userData.data()?['username'] ?? 'No Name';
-        _userEmail = userData.data()?['email'] ?? 'No Email';
-        _userPhone = userData.data()?['phone'] ?? 'No Phone';
-      });
+    try {
+      if (user != null) {
+        var userData = await firestore.collection('users').doc(user!.uid).get();
+        if (mounted) {
+          setState(() {
+            _userName = userData.data()?['username'] ?? 'No Name';
+            _userEmail = userData.data()?['email'] ?? 'No Email';
+            _userPhone = userData.data()?['phone'] ?? 'No Phone';
+            _isLoading = false;
+          });
+        }
+      } else {
+        if (mounted) {
+          setState(() {
+            _userName = 'No Name';
+            _userEmail = 'No Email';
+            _userPhone = 'No Phone';
+            _isLoading = false;
+          });
+        }
+      }
+    } catch (e) {
+      print('Error fetching user data: $e');
+      if (mounted) {
+        setState(() {
+          _userName = 'Error loading name';
+          _userEmail = 'Error loading email';
+          _userPhone = 'Error loading phone';
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -57,7 +84,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
       appBar: AppBar(
         title: const Text('Profile'),
       ),
-      body: SingleChildScrollView(
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : SingleChildScrollView(
         child: Padding(
           padding: const EdgeInsets.all(16.0),
           child: Column(
@@ -80,17 +109,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   child: Column(
                     children: [
                       Text(
-                        _userName,
+                        _userName ?? 'Loading...',
                         style: Theme.of(context).textTheme.titleLarge,
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        _userEmail,
+                        _userEmail ?? 'Loading...',
                         style: Theme.of(context).textTheme.bodyLarge,
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        _userPhone,
+                        _userPhone ?? 'Loading...',
                         style: Theme.of(context).textTheme.bodyLarge,
                       ),
                     ],
@@ -146,7 +175,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 child: const Text('Log Out'),
               ),
               const SizedBox(height: 20),
-              const DeleteAccountButton(), // Add the DeleteAccountButton here
+              const DeleteAccountButton(),
               const SizedBox(height: 20),
             ],
           ),

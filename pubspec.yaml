@@ -1,6 +1,6 @@
 name: hive_flutter
 description: A new Flutter project for Hive restaurant and job seeker application.
-publish_to: 'none' # Remove this line if you wish to publish to pub.dev
+publish_to: 'none'
 
 version: 1.0.0+1
 
@@ -20,7 +20,6 @@ dependencies:
   # Maps - Updated to compatible versions
   google_maps_flutter: ^2.9.0
   google_maps_flutter_web: ^0.5.8
-  # REMOVED: flutter_google_places: ^0.3.0
   google_maps_webservice: ^0.0.20-nullsafety.5
 
   # UI Components
@@ -49,11 +48,13 @@ dev_dependencies:
 
 # Dependency overrides to resolve conflicts
 dependency_overrides:
-  # Override for map compatibility
   http: ^1.1.2
   web: ^0.5.1
 
 flutter:
   uses-material-design: true
+  # Enable code generation to reduce bundle size
+  generate: true
+
   assets:
     - assets/profileimage.png

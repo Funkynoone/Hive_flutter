@@ -19,25 +19,47 @@ class DashboardScreen extends StatefulWidget {
 class _DashboardScreenState extends State<DashboardScreen> {
   int _selectedIndex = 0;
   bool isBusinessOwner = false;
+  bool _isLoading = true;
   late final List<Widget> _screens;
 
   @override
   void initState() {
     super.initState();
-    fetchUserRole();
+    // Delay user role fetching to not block UI
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      fetchUserRole();
+    });
   }
 
+  // Make fetchUserRole more efficient
   void fetchUserRole() async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user != null) {
-      final docSnapshot = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.uid)
-          .get();
-      setState(() {
-        isBusinessOwner = docSnapshot['isBusinessOwner'] ?? false;
-        _initializeScreens();
-      });
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        // Use get() instead of real-time listener for one-time data
+        final docSnapshot = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .get();
+
+        if (mounted) {
+          setState(() {
+            isBusinessOwner = docSnapshot.data()?['isBusinessOwner'] ?? false;
+            _isLoading = false;
+            _initializeScreens();
+          });
+        }
+      }
+    } catch (e) {
+      print('Error fetching user role: $e');
+      // Continue with default values
+      if (mounted) {
+        setState(() {
+          isBusinessOwner = false;
+          _isLoading = false;
+          _initializeScreens();
+        });
+      }
     }
   }
 
@@ -72,19 +94,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
       screens.insert(2, const AddJobScreen());
     }
 
-    setState(() {
-      _screens = screens;
-    });
+    _screens = screens;
   }
 
   Widget _buildChatButton() {
     final currentUser = FirebaseAuth.instance.currentUser;
-    if (currentUser == null) {
-      return IconButton(
+    if (currentUser == null) return IconButton(
       icon: const Icon(Icons.chat_bubble_outline),
       onPressed: () {},
     );
-    }
 
     if (isBusinessOwner) {
       // For business owners: count unprocessed message notifications
@@ -233,7 +251,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
-  // Updated _buildNotificationButton method for dashboard_screen.dart
   Widget _buildNotificationButton() {
     final currentUser = FirebaseAuth.instance.currentUser;
     if (currentUser == null) return IconButton(
@@ -320,6 +337,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Scaffold(
+        body: Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+
     List<BottomNavigationBarItem> navBarItems = [
       const BottomNavigationBarItem(icon: Icon(Icons.explore), label: 'Explore'),
       const BottomNavigationBarItem(icon: Icon(Icons.work), label: 'Jobs'),
@@ -330,7 +355,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('App'),
+        title: const Text('Hive'),
         leading: _buildChatButton(),
         actions: [
           _buildNotificationButton(),

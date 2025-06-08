@@ -23,10 +23,15 @@ Future<void> main() async {
   ]);
 
   try {
-    await Firebase.initializeApp(
-      options: DefaultFirebaseOptions.currentPlatform,
-    );
-    print("Firebase initialized successfully");
+    // Check if Firebase is already initialized
+    if (Firebase.apps.isEmpty) {
+      await Firebase.initializeApp(
+        options: DefaultFirebaseOptions.currentPlatform,
+      );
+      print("Firebase initialized successfully");
+    } else {
+      print("Firebase already initialized");
+    }
   } catch (e) {
     print("Firebase initialization error: $e");
   }
@@ -41,7 +46,7 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Hive Flutter',
-      debugShowCheckedModeBanner: false, // Remove debug banner
+      debugShowCheckedModeBanner: false,
       theme: ThemeData(
         primarySwatch: Colors.blue,
         scaffoldBackgroundColor: Colors.white,
@@ -55,7 +60,6 @@ class MyApp extends StatelessWidget {
             statusBarBrightness: Brightness.dark,
           ),
         ),
-        // Enhanced visual feedback for buttons
         elevatedButtonTheme: ElevatedButtonThemeData(
           style: ElevatedButton.styleFrom(
             elevation: 2,
@@ -65,14 +69,12 @@ class MyApp extends StatelessWidget {
             padding: const EdgeInsets.symmetric(vertical: 12),
           ),
         ),
-        // Card theme - FIXED: Changed from CardTheme to CardThemeData
         cardTheme: CardThemeData(
           elevation: 2,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
           ),
         ),
-        // Input decoration theme
         inputDecorationTheme: InputDecorationTheme(
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(8),
@@ -86,13 +88,11 @@ class MyApp extends StatelessWidget {
         '/': (context) => const AuthWrapper(),
         '/login': (context) => const LoginScreen(),
       },
-      // Handle unknown routes
       onUnknownRoute: (settings) {
         return MaterialPageRoute(
           builder: (context) => const AuthWrapper(),
         );
       },
-      // Handle generation of routes
       onGenerateRoute: (settings) {
         switch (settings.name) {
           case '/':
@@ -109,15 +109,12 @@ class MyApp extends StatelessWidget {
             );
         }
       },
-      // Error widget customization
       builder: (context, child) {
         return MediaQuery(
-          // Prevent text scaling beyond reasonable limits
           data: MediaQuery.of(context).copyWith(
             textScaler: TextScaler.linear(MediaQuery.of(context).textScaleFactor.clamp(0.8, 1.2)),
           ),
           child: ScrollConfiguration(
-            // Custom scroll behavior for consistent scrolling across platforms
             behavior: const ScrollBehavior().copyWith(
               physics: const BouncingScrollPhysics(),
               scrollbars: false,
